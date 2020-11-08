@@ -16,12 +16,9 @@ def add_mean_by_movie(ratings, ratings_test):
         df_movie_mean, how="left", left_on="movieID", right_on="movieID"
     )
     ratings_test.fillna(global_mean, inplace=True)
+    ratings_test.rating = None
 
     return ratings, ratings_test
-
-
-def save_to_csv(data, file_name):
-    data.to_csv(file_name, index=False)
 
 
 def generate_profile_by_user(ratings, genres):
@@ -56,9 +53,11 @@ def generate_profile_by_user(ratings, genres):
     return pd.DataFrame.from_dict(list_of_profiles).fillna(0)
 
 
-def add_similarity_by_movie(
-    ratings, ratings_test, movies, genres, profile_by_user
-):
+def add_similarity_by_movie(ratings, ratings_test):
+    genres = pd.read_csv("./data/movie_genres.csv")
+    movies = pd.read_csv("./data/movies.csv")
+    profile_by_user = generate_profile_by_user(ratings, genres)
+
     list_of_genres = genres.genre.unique().tolist()
     list_of_genres.sort()
     genres["value"] = 1
@@ -123,35 +122,56 @@ def add_similarity_by_movie(
     return ratings, ratings_test
 
 
+def save_to_csv(data, file_name):
+    data.to_csv(file_name, index=False)
+
+
 def execute_all():
     df_ratings = pd.read_csv("./data/ratings_train.csv")
     df_ratings_test = pd.read_csv("./data/ratings_test.csv")
 
     train, test = add_mean_by_movie(df_ratings, df_ratings_test)
-    save_to_csv(train, "./data/ratings_train_with_mean.csv")
-    save_to_csv(test, "./data/ratings_test_with_mean.csv")
+    train, test = add_similarity_by_movie(df_ratings, df_ratings_test)
 
-    df_genres = pd.read_csv("./data/movie_genres.csv")
-
-    df_profile_by_user = generate_profile_by_user(df_ratings, df_genres)
-    save_to_csv(df_profile_by_user, "./data/profile_by_user.csv")
-
-    df_movies = pd.read_csv("./data/movies.csv")
-    train, test = add_similarity_by_movie(
-        df_ratings, df_ratings_test, df_movies, df_genres, df_profile_by_user
-    )
     save_to_csv(train, "./data/ratings_train_mean_similarity.csv")
     save_to_csv(test, "./data/ratings_test_mean_similarity.csv")
 
 
 if __name__ == "__main__":
+    pipeline_executions = {
+        1: [add_mean_by_movie],
+        2: [add_similarity_by_movie],
+    }
+
+    execution_help = ""
+    for k, v in pipeline_executions.items():
+        execution_help = (
+            execution_help
+            + f"Step {k} execute {', '.join([m.__name__ for m in v])}.\n"
+        )
     parser = argparse.ArgumentParser(description="ETL cli.")
-    parser.add_argument("-s", "--step", help="which step of the etl execute")
+    parser.add_argument(
+        "-s",
+        "--step",
+        dest="step",
+        type=int,
+        nargs=None,
+        help=f"which step of the etl execute. {execution_help}",
+    )
+    parser.add_argument(
+        "-p",
+        "--postfix",
+        dest="postfix",
+        type=int,
+        nargs=None,
+        help=f"number to indicate the postfix in the outputfiles",
+        required=True,
+    )
     parser.add_argument(
         "-a",
         "--all",
-        action="store_const",
         dest="execute_all",
+        action="store_const",
         const="all",
         help="execute the entire etl",
     )
@@ -159,3 +179,10 @@ if __name__ == "__main__":
 
     if args.execute_all:
         execute_all()
+    elif args.step:
+        train = pd.read_csv("./data/ratings_train.csv")
+        test = pd.read_csv("./data/ratings_test.csv")
+        for a_method in pipeline_executions[args.step]:
+            train, test = a_method(train, test)
+            save_to_csv(train, f"./data/ratings_train_{args.postfix}.csv")
+            save_to_csv(test, f"./data/ratings_test_{args.postfix}.csv")
