@@ -1,22 +1,48 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Mon Nov  9 19:15:34 2020
+
+@author: juan
+"""
+
+
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import argparse
 
 
-def expand_data_frame(df):
-    df.insert(0, "user_id", range(len(df)))
+def expand_data_frame(df, file_type):
+    is_train = "train" == file_type
+    is_test = "test" == file_type
+    is_item = "item" == file_type
 
-    df_event_user = pd.DataFrame()
-    print("Expand dataframe...")
-    for row in tqdm(df.itertuples()):
-        df_temp = pd.DataFrame(row.user_history)
-        df_temp.insert(0, "user_id", [row.user_id] * len(df_temp))
-        df_event_user = df_event_user.append(df_temp)
+    if is_train or is_test:
+        df.insert(0, "user_id", range(len(df)))
 
-    return df_event_user.merge(
-        df[["user_id", "item_bought"]], left_on="user_id", right_on="user_id"
-    )
+        event_user = {}
+        for row in tqdm(df.itertuples()):
+            event_user[row.user_id] = {
+                "user_id": [row.user_id] * len(row.user_history),
+                "event_info": list(map(lambda u: u["event_info"], row.user_history)),
+                "event_timestamp": list(
+                    map(lambda u: u["event_timestamp"], row.user_history)
+                ),
+                "event_type": list(map(lambda u: u["event_type"], row.user_history)),
+            }
+        df_event_user = pd.concat(
+            {k: pd.DataFrame(v) for k, v in event_user.items()}, axis=0
+        )
+
+        if is_train:
+            return df_event_user.merge(
+                df[["user_id", "item_bought"]], left_on="user_id", right_on="user_id"
+            )
+        else:
+            return df_event_user
+    elif is_item:
+        pass
 
 
 def save_to_csv(data, file_name):
@@ -31,8 +57,7 @@ if __name__ == "__main__":
     execution_help = ""
     for k, v in pipeline_executions.items():
         execution_help = (
-            execution_help
-            + f"Step {k} execute {', '.join([m.__name__ for m in v])}.\n"
+            execution_help + f"Step {k} execute {', '.join([m.__name__ for m in v])}.\n"
         )
     parser = argparse.ArgumentParser(description="ETL cli.")
     parser.add_argument(
@@ -44,18 +69,35 @@ if __name__ == "__main__":
         help=f"which step of the etl execute. {execution_help}",
     )
     parser.add_argument(
+        "-f",
+        "--file",
+        dest="file",
+        type=str,
+        nargs=None,
+        help="filename to preprocess",
+        required=True,
+    )
+    parser.add_argument(
+        "-t",
+        "--type",
+        dest="type",
+        choices=["train", "test", "items"],
+        help="type of file to preprocess",
+    )
+    parser.add_argument(
         "-p",
         "--postfix",
         dest="postfix",
         type=int,
         nargs=None,
-        help=f"number to indicate the postfix in the outputfiles",
+        help="number to indicate the postfix in the outputfiles",
         required=True,
     )
     args = parser.parse_args()
 
     if args.step:
-        train = pd.read_json("./data/train_dataset.jl", lines=True)
+        file_name = args.file
+        df = pd.read_json(file_name, lines=True)
         for a_method in pipeline_executions[args.step]:
-            train, test = a_method(train)
-            save_to_csv(train, f"./data/train_dataset{args.postfix}.csv")
+            df = a_method(df, args.type)
+            save_to_csv(df, f"{file_name}_{args.postfix}.csv")
