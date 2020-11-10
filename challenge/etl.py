@@ -8,41 +8,55 @@ Created on Mon Nov  9 19:15:34 2020
 
 
 import pandas as pd
-import numpy as np
 from tqdm import tqdm
 import argparse
 
 
-def expand_data_frame(df, file_type):
-    is_train = "train" == file_type
-    is_test = "test" == file_type
-    is_item = "item" == file_type
+def expand_data_frame(df):
+    df.insert(0, "navigation_id", range(len(df)))
 
-    if is_train or is_test:
-        df.insert(0, "user_id", range(len(df)))
+    event_user = {}
+    for row in tqdm(df.itertuples()):
+        event_user[row.navigation_id] = {
+            "navigation_id": [row.navigation_id] * len(row.user_history),
+            "event_info": list(
+                map(lambda u: u["event_info"], row.user_history)
+            ),
+            "event_timestamp": list(
+                map(lambda u: u["event_timestamp"], row.user_history)
+            ),
+            "event_type": list(
+                map(lambda u: u["event_type"], row.user_history)
+            ),
+        }
+    return pd.concat(
+        {k: pd.DataFrame(v) for k, v in event_user.items()}, axis=0
+    )
 
-        event_user = {}
-        for row in tqdm(df.itertuples()):
-            event_user[row.user_id] = {
-                "user_id": [row.user_id] * len(row.user_history),
-                "event_info": list(map(lambda u: u["event_info"], row.user_history)),
-                "event_timestamp": list(
-                    map(lambda u: u["event_timestamp"], row.user_history)
-                ),
-                "event_type": list(map(lambda u: u["event_type"], row.user_history)),
-            }
-        df_event_user = pd.concat(
-            {k: pd.DataFrame(v) for k, v in event_user.items()}, axis=0
-        )
 
-        if is_train:
-            return df_event_user.merge(
-                df[["user_id", "item_bought"]], left_on="user_id", right_on="user_id"
-            )
-        else:
-            return df_event_user
-    elif is_item:
-        pass
+def expand_train(df):
+    df_event_user = expand_data_frame(df)
+
+    return df_event_user.merge(
+        df[["navigation_id", "item_bought"]],
+        left_on="navigation_id",
+        right_on="navigation_id",
+    )
+
+
+def expand_test(df):
+    return expand_data_frame(df)
+
+
+def expand_items(df):
+    df["country"] = list(map(lambda item: item[:3], df.category_id))
+    df.condition = df[["condition"]].fillna("not_specified")
+    df.domain_id = df[["domain_id"]].fillna("unknown")
+
+    df.price = df[["price"]].fillna(-1)
+    df.drop(columns=["product_id"], inplace=True)
+
+    return df
 
 
 def save_to_csv(data, file_name):
@@ -50,54 +64,49 @@ def save_to_csv(data, file_name):
 
 
 if __name__ == "__main__":
-    pipeline_executions = {
-        1: [expand_data_frame],
-    }
+    pipeline_executions = [
+        expand_train,
+        expand_test,
+        expand_items,
+    ]
 
-    execution_help = ""
-    for k, v in pipeline_executions.items():
-        execution_help = (
-            execution_help + f"Step {k} execute {', '.join([m.__name__ for m in v])}.\n"
-        )
+    execution_help = (
+        f"Methods: {', '.join([m.__name__ for m in pipeline_executions])}.\n"
+    )
+
     parser = argparse.ArgumentParser(description="ETL cli.")
     parser.add_argument(
         "-s",
         "--step",
         dest="step",
-        type=int,
-        nargs=None,
-        help=f"which step of the etl execute. {execution_help}",
-    )
-    parser.add_argument(
-        "-f",
-        "--file",
-        dest="file",
         type=str,
         nargs=None,
-        help="filename to preprocess",
+        help=f"which method of the etl execute. {execution_help}",
+    )
+    parser.add_argument(
+        "-i",
+        "--input",
+        dest="input",
+        type=str,
+        nargs=None,
+        help="location of the file",
         required=True,
     )
     parser.add_argument(
-        "-t",
-        "--type",
-        dest="type",
-        choices=["train", "test", "items"],
-        help="type of file to preprocess",
-    )
-    parser.add_argument(
-        "-p",
-        "--postfix",
-        dest="postfix",
-        type=int,
+        "-o",
+        "--output",
+        dest="output",
+        type=str,
         nargs=None,
-        help="number to indicate the postfix in the outputfiles",
+        help="location to save the result",
         required=True,
     )
     args = parser.parse_args()
 
     if args.step:
-        file_name = args.file
-        df = pd.read_json(file_name, lines=True)
-        for a_method in pipeline_executions[args.step]:
-            df = a_method(df, args.type)
-            save_to_csv(df, f"{file_name}_{args.postfix}.csv")
+        file_in = args.input
+        file_out = args.output
+        df = pd.read_json(file_in, lines=True)
+        a_method = eval(args.step)
+        df = a_method(df)
+        save_to_csv(df, f"{file_out}")
