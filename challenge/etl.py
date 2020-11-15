@@ -10,15 +10,16 @@ Created on Mon Nov  9 19:15:34 2020
 import pandas as pd
 from tqdm import tqdm
 import argparse
+import time
 
 
 def expand_data_frame(df):
-    df.insert(0, "navigation_id", range(len(df)))
+    df.insert(0, "session_id", range(len(df)))
 
     event_user = {}
     for row in tqdm(df.itertuples()):
-        event_user[row.navigation_id] = {
-            "navigation_id": [row.navigation_id] * len(row.user_history),
+        event_user[row.session_id] = {
+            "session_id": [row.session_id] * len(row.user_history),
             "event_info": list(
                 map(lambda u: u["event_info"], row.user_history)
             ),
@@ -38,9 +39,9 @@ def expand_train(df):
     df_event_user = expand_data_frame(df)
 
     return df_event_user.merge(
-        df[["navigation_id", "item_bought"]],
-        left_on="navigation_id",
-        right_on="navigation_id",
+        df[["session_id", "item_bought"]],
+        left_on="session_id",
+        right_on="session_id",
     )
 
 
@@ -49,14 +50,26 @@ def expand_test(df):
 
 
 def expand_items(df):
-    df["country"] = list(map(lambda item: item[:3], df.category_id))
+    df["site"] = list(map(lambda item: item[:3], df.category_id))
     df.condition = df[["condition"]].fillna("not_specified")
-    df.domain_id = df[["domain_id"]].fillna("unknown")
+    df.domain_id = df[['domain_id']].fillna('unknown')
+    # df.domain_id = list(
+    #    map(lambda item: item[4:] if item != None else "unknown", df.domain_id)
+    # )
 
     df.price = df[["price"]].fillna(-1)
     df.drop(columns=["product_id"], inplace=True)
 
     return df
+
+
+def generate_random_sample(df, n=5000):
+    sample = df.sample(n=n, random_state=int(time.time()))
+
+    if "item_bought" in sample.columns:
+        return expand_train(sample)
+    else:
+        return expand_test(sample)
 
 
 def save_to_csv(data, file_name):
@@ -68,6 +81,7 @@ if __name__ == "__main__":
         expand_train,
         expand_test,
         expand_items,
+        generate_random_sample,
     ]
 
     execution_help = (
