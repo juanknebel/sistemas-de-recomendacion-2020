@@ -3,7 +3,7 @@ from tqdm import tqdm
 import numpy as np
 import time
 import math
-from random import sample, seed, randint
+from random import sample, seed, randint, shuffle
 import csv
 
 
@@ -53,13 +53,11 @@ def ndcg(predicted, effective_item, items):
 
 
 def split_train_test_ids(list_of_ids, percentage=70):
-    total = len(list_of_ids) * (percentage / 100)
+    # np.random.choice(a, 3, replace=False)
+    until = int(len(list_of_ids) * (percentage / 100))
     seed(SEED)
-    session_id_train = sample(list_of_ids, int(total))
-    session_id_test = list(
-        filter(lambda id: id not in session_id_train, list_of_ids)
-    )
-    return session_id_train, session_id_test
+    shuffle(list_of_ids)
+    return list_of_ids[:until], list_of_ids[until:]
 
 
 def generate_dictionary_by_session(session_history):
@@ -82,7 +80,7 @@ def generate_dictionary_by_session(session_history):
     return recommended_by_session
 
 
-def generaate_dictionary_by_domain(items):
+def generate_dictionary_by_domain(items):
     items_by_domain = {}
     for name, group in items.groupby("domain_id"):
         items_by_domain[name] = group.item_id.tolist()
@@ -90,7 +88,59 @@ def generaate_dictionary_by_domain(items):
     return items_by_domain
 
 
-seed(42)
+def generate_submission(filaname, predictions):
+    with open(filaname, "w") as file:
+        write = csv.writer(file)
+        write.writerows(predictions)
+
+
+def predict(recommendations, random_item, items, items_by_domain):
+    predictions = []
+    for _, recommendations in tqdm(recommendations.items()):
+        # first 10 to predict
+        predicted = list(recommendations.keys())[:10]
+
+        if len(predicted) < 10:
+            # sort items by views
+            try:
+                most_viewed = list(
+                    {
+                        k: v
+                        for k, v in sorted(
+                            recommendations.items(),
+                            key=lambda item: item[1],
+                            reverse=True,
+                        )
+                    }
+                )[0]
+            except:
+                most_viewed = random_item
+
+            most_viewed_by_domain = items[
+                items.index == most_viewed
+            ].domain_id.iloc[0]
+
+            predicted += items_by_domain[most_viewed_by_domain][
+                : 10 - len(predicted)
+            ]
+            for i in range(10 - len(predicted)):
+                seed(i)
+                onther_random_item = items.loc[
+                    randint(0, len(items) - 1)
+                ].item_id
+                predicted.append(onther_random_item)
+
+        predictions.append(predicted)
+
+    return predictions
+
+
+def generate_random_item(items):
+    seed(SEED)
+    return items.loc[randint(0, len(items) - 1)].item_id
+
+
+seed(SEED)
 dtype = {
     "item_id": "int",
     "title": "str",
@@ -105,47 +155,11 @@ df_items.set_index("item_id")
 df_train = pd.read_csv("../data/03_primary/test_dataset.csv")
 
 recommendations = generate_dictionary_by_session(df_train)
-items_by_domain = generaate_dictionary_by_domain(df_items)
+items_by_domain = generate_dictionary_by_domain(df_items)
 
-predictions = []
-seed(SEED)
-random_item = df_items.loc[randint(0, len(df_items) - 1)].item_id
-for session_id, recommendations in tqdm(recommendations.items()):
-    # first 10 to predict
-    predicted = list(recommendations.keys())[:10]
+random_item = generate_random_item(df_items)
+predictions = predict(recommendations, random_item, df_items, items_by_domain)
 
-    if len(predicted) < 10:
-        # sort items by views
-        try:
-            most_viewed = list(
-                {
-                    k: v
-                    for k, v in sorted(
-                        recommendations.items(),
-                        key=lambda item: item[1],
-                        reverse=True,
-                    )
-                }
-            )[0]
-        except:
-            most_viewed = random_item
-
-        most_viewed_by_domain = df_items[
-            df_items.index == most_viewed
-        ].domain_id.iloc[0]
-
-        predicted += items_by_domain[most_viewed_by_domain][
-            : 10 - len(predicted)
-        ]
-        for i in range(10 - len(predicted)):
-            seed(i)
-            onther_random_item = df_items.loc[
-                randint(0, len(df_items) - 1)
-            ].item_id
-            predicted.append(onther_random_item)
-
-    predictions.append(predicted)
-
-with open("../data/07_model_output/submission_baseline_1.csv", "w") as file:
-    write = csv.writer(file)
-    write.writerows(predictions)
+generate_submission(
+    "../data/07_model_output/submission_baseline_1.csv", predictions
+)
