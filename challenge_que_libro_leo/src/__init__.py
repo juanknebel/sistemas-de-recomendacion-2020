@@ -1,1 +1,2 @@
-from .surprise_model import _fit, _train, _tune_train, _generate_submission
+from .surprise_model import _tune_train, _train, _fit, _generate_submission
+from .lightgbm_model import _tune_train

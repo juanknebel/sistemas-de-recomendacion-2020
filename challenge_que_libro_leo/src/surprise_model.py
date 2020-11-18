@@ -1,6 +1,11 @@
 import pandas as pd
+import math
+
 import surprise as sp
+
 import logging
+
+from sklearn.metrics import mean_squared_error
 
 
 logger = logging.getLogger("surprise")
@@ -63,14 +68,21 @@ def _train(train, prediction_algorithm, params, scale):
     model.fit(trainset)
     y_predictions = model.test(testset)
     logger.debug(f"Accuracy in test: {sp.accuracy.rmse(y_predictions)}")
+    #_, _, test_y = zip(*testset)
+    #predictions_y = list(map(lambda pred: pred.est, y_predictions))
+    #logger.debug(
+    #    f"Accuracy 2 {math.sqrt(mean_squared_error(list(test_y), predictions_y))}"
+    #)
 
     model.fit(data.build_full_trainset())
     return model
 
 
 def _fit(test_pairs, model):
+    logger.info(f"Fitting test ...")
     return list(map(lambda x: model.predict(x[0], x[1]).est, test_pairs))
 
 
 def _generate_submission(submission, file_name):
+    logger.info(f"Saving submission to {file_name} ...")
     submission.to_csv(file_name, index=False)
