@@ -9,7 +9,7 @@ from sklearn.metrics import mean_squared_error
 
 
 logger = logging.getLogger("surprise")
-logger.setLevel(level=logging.DEBUG)
+logger.setLevel(level=logging.INFO)
 
 error_handler = logging.FileHandler("errors.log")
 error_handler.setLevel(level=logging.ERROR)
@@ -50,8 +50,8 @@ def _tune_train(
     gs.fit(data_train)
 
     best_params = gs.best_params["rmse"]
-    logger.debug(f"Best score in validation: {gs.best_score['rmse']}")
-    logger.debug(f"Best params in validation: {best_params}")
+    logger.info(f"Best rmse in validation: {gs.best_score['rmse']}")
+    logger.info(f"Best params in validation: {best_params}")
 
     return best_params
 
@@ -61,16 +61,16 @@ def _train(train, prediction_algorithm, params, scale):
     reader = sp.reader.Reader(rating_scale=scale)
     data = sp.dataset.Dataset.load_from_df(train, reader)
     trainset, testset = sp.model_selection.train_test_split(
-        data, test_size=0.30, random_state=0
+        data, test_size=0.20, random_state=0
     )
 
     model = prediction_algorithm(**params)
     model.fit(trainset)
     y_predictions = model.test(testset)
-    logger.debug(f"Accuracy in test: {sp.accuracy.rmse(y_predictions)}")
+    logger.info(f"rmse in train: {sp.accuracy.rmse(y_predictions)}")
     #_, _, test_y = zip(*testset)
     #predictions_y = list(map(lambda pred: pred.est, y_predictions))
-    #logger.debug(
+    #logger.info(
     #    f"Accuracy 2 {math.sqrt(mean_squared_error(list(test_y), predictions_y))}"
     #)
 

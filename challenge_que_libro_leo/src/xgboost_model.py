@@ -3,13 +3,13 @@ import pandas as pd
 import math
 import logging
 
-import lightgbm
+import xgboost
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
 from sklearn.metrics import mean_squared_error
 
 
 
-logger = logging.getLogger("lightgbm")
+logger = logging.getLogger("xgboost")
 logger.setLevel(level=logging.DEBUG)
 
 error_handler = logging.FileHandler("errors.log")
@@ -50,13 +50,13 @@ def _train(train, train_y, prediction_algorithm):
     logger.info(f"Training lgbm ...")
 
     X_train, X_test, y_train, y_test = train_test_split(
-        train, train_y, test_size=0.2, random_state=0
+        train, train_y, test_size=0.3, random_state=0
     )
     model = prediction_algorithm.fit(X_train, y_train)
     y_predictions = model.predict(X_test)
 
     logger.debug(
-        f"rmse in train: {math.sqrt(mean_squared_error(y_test,y_predictions))}"
+        f"Accuracy in test: {math.sqrt(mean_squared_error(y_test,y_predictions))}"
     )
     return model
 
