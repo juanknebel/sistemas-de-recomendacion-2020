@@ -158,3 +158,4 @@ def merge_features():
 
     df_train.to_csv("./data/03_primary/opiniones_train_final.csv", index=False)
     df_test.to_csv("./data/03_primary/opiniones_test_final.csv", index=False)
+    
