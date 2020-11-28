@@ -158,4 +158,58 @@ def merge_features():
 
     df_train.to_csv("./data/03_primary/opiniones_train_final.csv", index=False)
     df_test.to_csv("./data/03_primary/opiniones_test_final.csv", index=False)
-    
+
+
+def add_opinions():
+    df_train = pd.read_csv("../data/01_raw/opiniones_train.csv")
+    df_test = pd.read_csv("../data/01_raw/opiniones_test.csv")
+
+    opinions_by_user = (
+        df_train.groupby("usuario")
+        .agg("count")
+        .reset_index()[["usuario", "libro"]]
+        .rename(columns={"libro": "cantidad_opiniones"})
+    )
+    opinions_by_user_test = (
+        df_test.groupby("usuario")
+        .agg("count")
+        .reset_index()[["usuario", "libro"]]
+        .rename(columns={"libro": "cantidad_opiniones"})
+    )
+
+    opinions_by_user = (
+        df_train.groupby("usuario")
+        .agg("count")
+        .reset_index()[["usuario", "libro"]]
+        .rename(columns={"libro": "cantidad_opiniones"})
+    )
+    opinions_by_user_test = (
+        df_test.groupby("usuario")
+        .agg("count")
+        .reset_index()[["usuario", "libro"]]
+        .rename(columns={"libro": "cantidad_opiniones"})
+    )
+
+    # Cada dataset completo con la cantidad de opiniones
+    new_train = df_train.merge(
+        opinions_by_user, left_on="usuario", right_on="usuario"
+    )
+    new_test = df_test.merge(
+        opinions_by_user_test, left_on="usuario", right_on="usuario"
+    )
+
+    new_train.to_csv(
+        "../data/02_intermediate/opiniones_train_opiniones_1.csv", index=False
+    )
+    new_test.to_csv(
+        "../data/02_intermediate/opiniones_test_opiniones_1.csv", index=False
+    )
+
+    # Pongo en test la cantidad de opiniones de train y completo los na con 0
+    new_test_2 = df_test.merge(
+        opinions_by_user, left_on="usuario", right_on="usuario"
+    )
+
+    new_test_2.to_csv(
+        "../data/02_intermediate/opiniones_test_opiniones_2.csv", index=False
+    )

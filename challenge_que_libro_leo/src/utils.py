@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pickle
 
 
 def split_in(index_list, k):
@@ -24,3 +25,26 @@ def extended_describe(data_frame, decimals=2, include_types=[np.number]):
         .T.round(decimals)
     )
     return pd.concat([describe, na_describe])
+
+
+def log(logger):
+    def wrap(func):
+        def wrapped_f(*args, **kwargs):
+            logger.info(f"Entering {func.__name__} ...")
+            return func(*args, **kwargs)
+
+        return wrapped_f
+
+    return wrap
+
+
+def model_to_pickle(output):
+    def wrap(func):
+        def wrapped_f(*args, **kwargs):
+            model = func(*args, **kwargs)
+            pickle.dump(model, open(f"./data/06_models/model_{output}", "wb"))
+            return model
+
+        return wrapped_f
+
+    return wrap
