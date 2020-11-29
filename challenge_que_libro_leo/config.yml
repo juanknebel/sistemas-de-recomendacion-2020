@@ -1,0 +1,14 @@
+Challenge:
+  LibroQueLeo:
+      experiment: 'Testing del batch con logger'
+      Path:
+        input: 'data/02_intermediate/'
+        models: 'data/06_models/'
+        submissions: 'data/07_model_output/'
+      Files:
+        train: 'opiniones_train_opiniones_1.csv'
+        test: 'opiniones_test_opiniones_2.csv'
+        submission: 'test_borrar'
+      Predictor:
+        # method: [predict_knn, predict_svd, predict_lightgbm]
+        method: 'predict_lightgbm'

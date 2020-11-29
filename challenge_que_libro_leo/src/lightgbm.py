@@ -44,7 +44,7 @@ class PredictLightgbm(PredictionModel):
             "colsample_bytree": [0.1, 0.5, 0.7],
             "subsample": [0.7, 0.9],
             "max_bin": [2, 5, 14, 20],
-            'min_split_gain' : [0.01],
+            "min_split_gain": [0.01],
             #'min_data_in_leaf':[5, 10, 15],
             "metric": ["rmse"],
             "reg_alpha": [1e-1, 1, 2, 5, 7, 10, 50, 100],
