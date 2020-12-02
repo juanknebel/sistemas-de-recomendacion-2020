@@ -1,10 +1,10 @@
-import src.surprise_model
 import surprise as sp
 from src.utils import split_in
-from src.predictors import PredictKNN, PredictSVD
+from src import PredictKNN, PredictSVD
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
+import pickle
 
 
 def clean_books(df_books):
@@ -24,7 +24,7 @@ def clean_books(df_books):
     return df_books
 
 
-def generate_new_features(df_train, algorithm, best_params):
+def generate_new_features(df_train, predictor):
     """
     Generación de nueva columna
     Separo en 5 el dataset, entreno con 4 partes y hago prediccion sobre el restante
@@ -34,7 +34,6 @@ def generate_new_features(df_train, algorithm, best_params):
     * [1,3,4,5] --> [2]
     * [2,3,4,5] --> [1]
     """
-    scale = (1.0, 10.0)
     index_split = split_in(list(np.arange(len(df_train))), 5)
     predictions = []
 
@@ -46,18 +45,22 @@ def generate_new_features(df_train, algorithm, best_params):
                 partial_df = partial_df.append(
                     df_train[df_train.index.isin(index_split[j])]
                 )
-        model = src.surprise_model._train(
-            partial_df[["usuario", "libro", "puntuacion"]],
-            algorithm,
-            best_params,
-            scale,
+
+        X_train = partial_df[["usuario", "libro"]]
+        y_train = partial_df.puntuacion
+        predictor.tune(X_train, y_train)
+        predictor.train(X_train, y_train)
+        y_prediction = predictor.predict(
+            predictor.transform_to_predict(partial_test[["usuario", "libro"]])
         )
-        predictions_test = src.surprise_model._fit(
-            zip(partial_test.usuario, partial_test.libro), model
-        )
-        predictions += zip(index_split[i], predictions_test)
+
+        predictions += zip(index_split[i], y_prediction)
 
     return sorted(predictions, key=lambda x: x[0])
+
+
+def load_model(input):
+    return pickle.load(open(input, "rb"))
 
 
 def generate_features_svd_knn_surprise():
@@ -66,23 +69,24 @@ def generate_features_svd_knn_surprise():
     np.random.seed(0)
 
     svd_predictor = PredictSVD()
-    svd_predictor.train(df_train)
-    df_test["svd"] = svd_predictor.predict(df_test)
+    svd_predictor.load_model(load_model("./data/06_models/svd"))
+    df_test["svd"] = svd_predictor.predict(
+        svd_predictor.transform_to_predict(df_test)
+    )
 
     knn_predictor = PredictKNN()
-    knn_predictor.train(df_train)
-    df_test["knn"] = knn_predictor.predict(df_test)
+    knn_predictor.load_model(load_model("./data/06_models/knn"))
+    df_test["knn"] = knn_predictor.predict(
+        knn_predictor.transform_to_predict(df_test)
+    )
 
-    svd = sp.prediction_algorithms.SVD
-    knn = sp.prediction_algorithms.knns.KNNBasic
-    features_svd = generate_new_features(
-        df_train, svd, svd_predictor.best_params()
-    )
-    features_knn = generate_new_features(
-        df_train, knn, knn_predictor.best_params()
-    )
-    df_train["svd"] = [pred[1] for pred in features_svd]
-    df_train["knn"] = [pred[1] for pred in features_knn]
+    df_train["svd"] = [
+        feature[1] for feature in generate_new_features(df_train, PredictSVD())
+    ]
+    
+    df_train["knn"] = [
+        feature[1] for feature in generate_new_features(df_train, PredictKNN())
+    ]
 
     df_train.to_csv(
         "./data/02_intermediate/opiniones_train_modelos.csv", index=False
@@ -161,8 +165,8 @@ def merge_features():
 
 
 def add_opinions():
-    df_train = pd.read_csv("../data/01_raw/opiniones_train.csv")
-    df_test = pd.read_csv("../data/01_raw/opiniones_test.csv")
+    df_train = pd.read_csv("./data/01_raw/opiniones_train.csv")
+    df_test = pd.read_csv("./data/01_raw/opiniones_test.csv")
 
     opinions_by_user = (
         df_train.groupby("usuario")
@@ -195,21 +199,30 @@ def add_opinions():
         opinions_by_user, left_on="usuario", right_on="usuario"
     )
     new_test = df_test.merge(
-        opinions_by_user_test, left_on="usuario", right_on="usuario"
+        opinions_by_user_test, left_on="usuario", right_on="usuario", how="left"
     )
 
     new_train.to_csv(
-        "../data/02_intermediate/opiniones_train_opiniones_1.csv", index=False
+        "./data/02_intermediate/opiniones_train_opiniones_1.csv", index=False
     )
     new_test.to_csv(
-        "../data/02_intermediate/opiniones_test_opiniones_1.csv", index=False
+        "./data/02_intermediate/opiniones_test_opiniones_1.csv", index=False
     )
 
     # Pongo en test la cantidad de opiniones de train y completo los na con 0
     new_test_2 = df_test.merge(
-        opinions_by_user, left_on="usuario", right_on="usuario"
+        opinions_by_user, left_on="usuario", right_on="usuario", how="left"
+    )
+
+    new_test_2["cantidad_opiniones"] = new_test_2["cantidad_opiniones"].fillna(
+        0
     )
 
     new_test_2.to_csv(
-        "../data/02_intermediate/opiniones_test_opiniones_2.csv", index=False
+        "./data/02_intermediate/opiniones_test_opiniones_2.csv", index=False
     )
+
+
+if __name__ == "__main__":
+    # add_opinions()
+    generate_features_svd_knn_surprise()

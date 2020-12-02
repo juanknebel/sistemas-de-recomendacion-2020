@@ -1,4 +1,4 @@
-from prediction import start
+from prediction import start, ensamble
 import logging
 import config_with_yaml as config
 
@@ -34,12 +34,48 @@ if __name__ == "__main__":
         "Challenge.LibroQueLeo.Files.train"
     )
     test_file = path_inut + cfg.getProperty("Challenge.LibroQueLeo.Files.test")
-    output_file = cfg.getProperty("Challenge.LibroQueLeo.Path.submissions")
-    submission_file = path_inut + cfg.getProperty(
+
+    output_path = cfg.getProperty("Challenge.LibroQueLeo.Path.submissions")
+    submission_file = output_path + cfg.getProperty(
         "Challenge.LibroQueLeo.Files.submission"
     )
-    method = cfg.getProperty("Challenge.LibroQueLeo.Predictor.method")
-    experiment_description = cfg.getProperty("Challenge.LibroQueLeo.experiment")
 
+    model_path = cfg.getProperty("Challenge.LibroQueLeo.Path.models")
+    model_file = model_path + cfg.getProperty(
+        "Challenge.LibroQueLeo.Files.model"
+    )
+
+    experiment_description = cfg.getProperty("Challenge.LibroQueLeo.experiment")
     logger.info(f"Experiment description: {experiment_description}")
-    start(method, train_file, test_file, submission_file, logger)
+
+    method = cfg.getProperty("Challenge.LibroQueLeo.Predictor.method")
+
+    random_state = cfg.getProperty("Challenge.LibroQueLeo.randomState")
+
+    if method == "ensamble":
+        # (predictor_identifier, weight), model_file
+        weights = cfg.getProperty("Challenge.LibroQueLeo.Ensamble.Weights")
+        models = cfg.getProperty("Challenge.LibroQueLeo.Ensamble.Models")
+        model_tuples = []
+        for predictor, weight in weights.items():
+            model_file = model_path + models[predictor]
+            model_tuples += [((predictor, weight), model_file)]
+
+        ensamble(
+            model_tuples,
+            train_file,
+            test_file,
+            submission_file,
+            logger,
+            random_state,
+        )
+    else:
+        start(
+            method,
+            train_file,
+            test_file,
+            submission_file,
+            logger,
+            model_file=model_file,
+            random_state=random_state,
+        )

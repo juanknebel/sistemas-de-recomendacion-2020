@@ -1,14 +1,25 @@
 Challenge:
   LibroQueLeo:
-      experiment: 'Testing del batch con logger'
+      experiment: 'Ensamble con los modelos de svd y knn como features'
+      randomState: 42
       Path:
         input: 'data/02_intermediate/'
         models: 'data/06_models/'
         submissions: 'data/07_model_output/'
       Files:
-        train: 'opiniones_train_opiniones_1.csv'
-        test: 'opiniones_test_opiniones_2.csv'
-        submission: 'test_borrar'
+        train: 'opiniones_train_modelos.csv'
+        test: 'opiniones_test_modelos.csv'
+        model: 'lgbm_modelos'
+        submission: 'ensamble_modelos.csv'
       Predictor:
-        # method: [predict_knn, predict_svd, predict_lightgbm]
-        method: 'predict_lightgbm'
+        # method: [predict_knn, predict_svd, predict_lightgbm, ensamble]
+        method: 'ensamble'
+      Ensamble:
+        Weights:
+          svd: 0.25
+          knn: 0.35
+          lgbm: 0.40
+        Models:
+          svd: svd
+          knn: knn
+          lgbm: lgbm_modelos

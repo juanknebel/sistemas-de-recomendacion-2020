@@ -27,3 +27,9 @@ class PredictionModel:
 
     def transform_to_predict(self, to_predict):
         return to_predict
+
+    def model(self):
+        return self.model_
+
+    def load_model(self, model):
+        raise NotImplementedError

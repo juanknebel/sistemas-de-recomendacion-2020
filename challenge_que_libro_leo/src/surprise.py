@@ -71,7 +71,7 @@ class PredictSurprise(PredictionModel):
         self.model_.fit(trainset)
 
     def transform_to_predict(self, to_predict):
-        return zip(to_predict.iloc[:,0], to_predict.iloc[:,1])
+        return zip(to_predict.iloc[:, 0], to_predict.iloc[:, 1])
 
 
 class PredictSVD(PredictSurprise):
@@ -86,6 +86,17 @@ class PredictSVD(PredictSurprise):
             "n_factors": range(40, 130, 5),
         }
 
+    def load_model(self, model):
+        self.n_jobs = -1
+        self.best_params_ = {
+            "n_epochs": model.n_epochs,
+            "lr_all": model.lr_bu,
+            "reg_all": model.reg_bu,
+            "n_factors": model.n_factors
+        }
+        self.n_jobs = -1
+        self.random_state = 0
+        self.model_ = model
 
 
 class PredictKNN(PredictSurprise):
@@ -98,3 +109,13 @@ class PredictKNN(PredictSurprise):
             "min_k": [1, 3, 9],
             "sim_options": {"name": ["msd", "cosine"], "user_based": [False]},
         }
+
+    def load_model(self, model):
+        self.best_params_ = {
+            "k": model.k,
+            "min_k": model.min_k,
+            "sim_options": model.sim_options,
+        }
+        self.n_jobs = 6
+        self.random_state = 0
+        self.model_ = model

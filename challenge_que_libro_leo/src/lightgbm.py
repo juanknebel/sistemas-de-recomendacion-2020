@@ -82,3 +82,9 @@ class PredictLightgbm(PredictionModel):
     def train(self, X_train, y_train):
         self.model_.set_params(**self.best_params_)
         self.model_.fit(X_train, y_train)
+
+    def load_model(self, model):
+        self.model_ = model
+        self.best_params_ = model.get_params()
+        self.n_jobs = self.best_params_["n_jobs"]
+        self.random_state = self.best_params_["random_state"]

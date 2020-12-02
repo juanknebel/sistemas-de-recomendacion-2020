@@ -28,7 +28,7 @@ logger.addHandler(info_handler)
 
 
 if __name__ == "__main__":
-    methods = ["predict_svd", "predict_knn", "predict_lightgbm"]
+    methods = ["predict_svd", "predict_knn", "predict_lightgbm", "ensamble"]
 
     execution_help = ", ".join(methods)
     parser = argparse.ArgumentParser(description="Prediction cli.")
