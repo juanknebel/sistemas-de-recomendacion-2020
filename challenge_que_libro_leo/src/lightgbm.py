@@ -3,6 +3,7 @@ from src.utils import log
 from sklearn.model_selection import RandomizedSearchCV, train_test_split
 import lightgbm
 import logging
+import numpy as np
 
 
 logger = logging.getLogger("lightgbm")
@@ -35,20 +36,20 @@ class PredictLightgbm(PredictionModel):
         self.model_ = lightgbm.LGBMRegressor()
         self.n_jobs = -1
         self.param_grid = {
-            "learning_rate": [0.001, 0.003, 0.01, 0.05],
-            "num_leaves": [4, 15, 20],
+            "learning_rate": [0.1, 0.05, 0.01, 0.005],
+            "num_leaves": list(range(8, 92, 4)),
             "boosting_type": ["gbdt", "goss", "dart"],
-            "max_depth": [8, 15, 20],
+            "max_depth": [3, 4, 5, 6, 8, 12, 16, -1],
             "random_state": [42],
-            "n_estimators": [500, 1000, 2000],
+            "n_estimators": [300, 500, 1000, 2000],
             "colsample_bytree": [0.1, 0.5, 0.7],
             "subsample": [0.7, 0.9],
             "max_bin": [2, 5, 14, 20],
             "min_split_gain": [0.01],
-            #'min_data_in_leaf':[5, 10, 15],
+            #'min_data_in_leaf':[10, 20, 40, 60, 100],
             "metric": ["rmse"],
-            "reg_alpha": [1e-1, 1, 2, 5, 7, 10, 50, 100],
-            "reg_lambda": [1e-1, 1, 5, 10, 20, 50, 100],
+            "reg_alpha": np.linspace(0.1, 0.95, 10),
+            "reg_lambda": np.linspace(0.1, 0.95, 10),
             #'early_stopping_round': [100, 500],
             "min_sum_hessian_in_leaf": [0.0001, 0.0004, 0.001, 0.1],
         }

@@ -1,6 +1,6 @@
 Challenge:
   LibroQueLeo:
-      experiment: 'Ensamble con los modelos de svd y knn como features'
+      experiment: 'LGBM con los modelos de svd y knn como features'
       randomState: 42
       Path:
         input: 'data/02_intermediate/'
@@ -10,15 +10,15 @@ Challenge:
         train: 'opiniones_train_modelos.csv'
         test: 'opiniones_test_modelos.csv'
         model: 'lgbm_modelos'
-        submission: 'ensamble_modelos.csv'
+        submission: 'lgbm_modelos.csv'
       Predictor:
         # method: [predict_knn, predict_svd, predict_lightgbm, ensamble]
-        method: 'ensamble'
+        method: 'predict_lightgbm'
       Ensamble:
         Weights:
-          svd: 0.25
-          knn: 0.35
-          lgbm: 0.40
+          svd: 0.35
+          knn: 0.45
+          lgbm: 0.20
         Models:
           svd: svd
           knn: knn
