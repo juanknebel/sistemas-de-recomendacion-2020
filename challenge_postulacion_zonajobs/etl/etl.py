@@ -3,8 +3,9 @@ import pandas as pd
 import numpy as np
 import datetime
 import logging
+from tqdm import tqdm
 
-logger = logging.getLogger("prediction-batch")
+logger = logging.getLogger("etl")
 logger.setLevel(level=logging.INFO)
 
 error_handler = logging.FileHandler("errors.log")
@@ -344,9 +345,61 @@ def generate_test():
     )
 
 
+@log(logger)
+def add_rank():
+    dtypes = {"idaviso": "int64", "idpostulante": "string"}
+    mydateparser = lambda x: datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
+    df_applicants_raw = pd.read_csv(
+        "./data/01_raw/postulaciones/postulaciones_train.csv",
+        parse_dates=["fechapostulacion"],
+        date_parser=mydateparser,
+        dtype=dtypes,
+    )
+
+    applicants_with_rank = []
+
+    for _, group in tqdm(df_applicants_raw.groupby("idpostulante")):
+        temp = group.sort_values(by="fechapostulacion", ascending=False)
+        temp["rank"] = range(len(temp))
+        applicants_with_rank += [temp]
+
+    df_applicants_with_rank = pd.concat(applicants_with_rank)
+
+    extended = pd.read_csv(
+        "./data/02_intermediate/postulaciones/postulaciones_extended_train.csv"
+    )
+    extended = (
+        extended.sort_values(by=["idpostulante", "idaviso"])
+        .reset_index()
+        .drop(columns="index")
+    )
+    df_applicants_with_rank = (
+        df_applicants_with_rank.sort_values(by=["idpostulante", "idaviso"])
+        .reset_index()
+        .drop(columns="index")
+    )
+
+    extended["fechapostulacion"] = df_applicants_with_rank["fechapostulacion"]
+    extended["rank"] = df_applicants_with_rank["rank"]
+    extended["id_test"] = df_applicants_with_rank["idpostulante"]
+    to_check = extended.id_test == extended.idpostulante
+
+    if not np.all(to_check):
+        raise Exception("Ids aren't the same")
+
+    extended.sort_values(by=["idpostulante", "rank"], inplace=True)
+    extended.drop(columns="id_test", inplace=True)
+
+    extended.to_csv(
+        "./data/02_intermediate/postulaciones/postulaciones_train_rank.csv",
+        index=False,
+    )
+
+
 if __name__ == "__main__":
-    remove_duplicates()
-    clean()
-    join_train()
-    calculate_applicants_matrix()
-    generate_test()
+    # remove_duplicates()
+    # clean()
+    # join_train()
+    # calculate_applicants_matrix()
+    # generate_test()
+    add_rank()

@@ -32,7 +32,9 @@ def log(logger):
     def wrap(func):
         def wrapped_f(*args, **kwargs):
             logger.info(f"Entering {func.__name__} ...")
-            return func(*args, **kwargs)
+            result = func(*args, **kwargs)
+            logger.info(f"Leaving {func.__name__} ...")
+            return result
 
         return wrapped_f
 
