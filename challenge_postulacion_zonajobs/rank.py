@@ -170,7 +170,7 @@ def predict_cold_start(
     return [name for name in return_dict.values()]
 
 
-def generate_user_feature(features, features_names):
+def generate_in_use_features(features, features_names):
     res = []
     for one_feature in features:
         one = []
@@ -212,6 +212,7 @@ def predict_hard_users(
     user_feature_hard_user = user_feature[
         user_feature.idpostulante.isin(train.idpostulante)
     ]
+    item_feature_hard_user = notices[notices.idaviso.isin(train.idaviso)]
 
     uf = generate_features(user_feature[["sexo", "estudio"]])
     itf = generate_features(
@@ -224,18 +225,31 @@ def predict_hard_users(
     dataset1.fit(
         train.idpostulante.unique(),  # all the users
         train.idaviso.unique(),  # all the items
-        # user_features=uf,  # additional user features
+        user_features=uf,  # additional user features
+        item_features=itf,
     )
     # plugging in the interactions and their weights
     (interactions, weights) = dataset1.build_interactions(
         [(x[1], x[0], x[3]) for x in train.values]
     )
 
-    feature_list = generate_user_feature(
+    user_feature_list = generate_in_use_features(
         user_feature_hard_user[["sexo", "estudio"]].values, ["sexo", "estudio"]
     )
-    #user_tuple = list(zip(user_feature_hard_user.idpostulante, feature_list))
-    #user_features = dataset1.build_user_features(user_tuple, normalize=False)
+    item_feature_list = generate_in_use_features(
+        item_feature_hard_user[
+            ["nombre_zona", "tipo_de_trabajo", "nivel_laboral", "nombre_area"]
+        ].values,
+        ["nombre_zona", "tipo_de_trabajo", "nivel_laboral", "nombre_area"],
+    )
+    user_tuple = list(
+        zip(user_feature_hard_user.idpostulante, user_feature_list)
+    )
+    item_tuple = list(
+        zip(item_feature_hard_user.idaviso.unique(), item_feature_list)
+    )
+    user_features = dataset1.build_user_features(user_tuple, normalize=False)
+    item_features = dataset1.build_item_features(item_tuple, normalize=False)
     (
         user_id_map,
         user_feature_map,
@@ -246,16 +260,18 @@ def predict_hard_users(
     model = lfm.LightFM(loss="warp", random_state=42)
     model.fit(
         interactions,
-        # user_features=user_features,
+        user_features=user_features,
+        item_features=item_features,
         sample_weight=weights,
         epochs=1000,
         num_threads=8,
     )
 
     test_precision = precision_at_k(
-        # model, interactions, user_features=user_features, k=10, num_threads=8
         model,
         interactions,
+        user_features=user_features,
+        item_features=item_features,
         k=10,
         num_threads=8,
     ).mean()
@@ -267,9 +283,10 @@ def predict_hard_users(
         n_users, n_items = interactions.shape
         prediction = np.argsort(
             model.predict(
-                # user_x, np.arange(n_items), user_features=user_features
                 user_x,
                 np.arange(n_items),
+                user_features=user_features,
+                item_features=item_features,
             )
         )[::-1]
         prediction_for_user = []
@@ -483,5 +500,6 @@ def rank_three_models():
 
 if __name__ == "__main__":
     import sys
+
     logger.info(f"Start experiment number: {sys.argv[1]}")
     rank_three_models()
