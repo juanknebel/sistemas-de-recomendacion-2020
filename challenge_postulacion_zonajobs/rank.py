@@ -224,7 +224,7 @@ def predict_hard_users(
     dataset1.fit(
         train.idpostulante.unique(),  # all the users
         train.idaviso.unique(),  # all the items
-        user_features=uf,  # additional user features
+        # user_features=uf,  # additional user features
     )
     # plugging in the interactions and their weights
     (interactions, weights) = dataset1.build_interactions(
@@ -234,8 +234,8 @@ def predict_hard_users(
     feature_list = generate_user_feature(
         user_feature_hard_user[["sexo", "estudio"]].values, ["sexo", "estudio"]
     )
-    user_tuple = list(zip(user_feature_hard_user.idpostulante, feature_list))
-    user_features = dataset1.build_user_features(user_tuple, normalize=False)
+    #user_tuple = list(zip(user_feature_hard_user.idpostulante, feature_list))
+    #user_features = dataset1.build_user_features(user_tuple, normalize=False)
     (
         user_id_map,
         user_feature_map,
@@ -246,14 +246,18 @@ def predict_hard_users(
     model = lfm.LightFM(loss="warp", random_state=42)
     model.fit(
         interactions,
-        user_features=user_features,
+        # user_features=user_features,
         sample_weight=weights,
         epochs=1000,
         num_threads=8,
     )
 
     test_precision = precision_at_k(
-        model, interactions, user_features=user_features, k=10, num_threads=8
+        # model, interactions, user_features=user_features, k=10, num_threads=8
+        model,
+        interactions,
+        k=10,
+        num_threads=8,
     ).mean()
     logger.info(f"Evaluation for LightFM is: {test_precision}")
 
@@ -263,7 +267,9 @@ def predict_hard_users(
         n_users, n_items = interactions.shape
         prediction = np.argsort(
             model.predict(
-                user_x, np.arange(n_items), user_features=user_features
+                # user_x, np.arange(n_items), user_features=user_features
+                user_x,
+                np.arange(n_items),
             )
         )[::-1]
         prediction_for_user = []
@@ -400,13 +406,22 @@ def rank_three_models():
         df_applicants_to_predict.idpostulante.isin(ids_cold_start)
     ].merge(df_applicants_genre, on="idpostulante", how="inner")
 
-    submission_files = []
+    submission_files = [
+        "cold_start_0",
+        "cold_start_1",
+        "cold_start_2",
+        "cold_start_3",
+        "cold_start_4",
+        "cold_start_5",
+        "cold_start_6",
+        "cold_start_7",
+    ]
     # Predict cold start
-    submission_files += predict_cold_start(
-        applicants_sex_notices,
-        df_test_cold_start,
-        top_ten_by_sex,
-    )
+    # submission_files += predict_cold_start(
+    #    applicants_sex_notices,
+    #    df_test_cold_start,
+    #    top_ten_by_sex,
+    # )
 
     # Split the the applicants that appear in train and test into two groups
     # hard_users: applicants that apply in more than 100 notices
@@ -467,4 +482,6 @@ def rank_three_models():
 
 
 if __name__ == "__main__":
+    import sys
+    logger.info(f"Start experiment number: {sys.argv[1]}")
     rank_three_models()
