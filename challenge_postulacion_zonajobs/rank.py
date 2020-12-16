@@ -55,6 +55,7 @@ def rank_cold_start(
     df_applicants_test: pd.DataFrame,
     top_ten_by_sex: dict,
     suffix: int,
+    return_dict: dict,
 ):
     normalized_test = normalize(test_attributes.to_numpy(), norm="l2")
     normalized_train = normalize(train_attributes.to_numpy(), norm="l2")
@@ -110,7 +111,9 @@ def rank_cold_start(
             )
 
         submission[applicant_to_predict_id] = notices_ids
-    write_dict(submission, f"cold_start_{suffix}")
+    filename = f"cold_start_{suffix}"
+    write_dict(submission, filename)
+    return_dict[f"thread_{suffix}"] = filename
 
 
 @log(logger)
@@ -138,6 +141,8 @@ def predict_cold_start(
     ]
 
     total = len(matrix_test)
+    manager = multiprocessing.Manager()
+    return_dict = manager.dict()
     jobs = []
     number_of_threads = 8
     intervals = calculate_intervals(number_of_threads, total)
@@ -152,10 +157,16 @@ def predict_cold_start(
                 applicants_test,
                 top_ten_by_sex,
                 index,
+                return_dict,
             ),
         )
         jobs.append(p)
         p.start()
+
+    for job in jobs:
+        job.join()
+
+    return [name for name in return_dict.values()]
 
 
 def generate_user_feature(features, features_names):
@@ -244,6 +255,7 @@ def predict_hard_users(
         final_predictions[a_user] = prediction_for_user
 
     write_dict(final_predictions, "lightfm")
+    return ["lightfm"]
 
 
 @log(logger)
@@ -253,7 +265,7 @@ def write_dict(submission: dict, filename: str, header=None):
         if header != None:
             out_writter.writerow(header)
         for applicant, notices in submission.items():
-            out_writter.writerows(zip([applicant] * len(notices), notices))
+            out_writter.writerows(zip(notices, [applicant] * len(notices)))
 
 
 @log(logger)
@@ -284,8 +296,22 @@ def generate_top_ten_advice_by_sex(applicants: pd.DataFrame):
 
 
 @log(logger)
-def join_submission_files():
-    pass
+def join_submission_files(
+    final_submission: str, partial_submission_files: list
+):
+    all_submission = []
+    for a_file in partial_submission_files:
+        with open(f"./data/07_model_output/{a_file}.csv", mode="r") as in_file:
+            in_reader = csv.reader(in_file, delimiter=",", quotechar="'")
+            all_submission += list(in_reader)
+
+    with open(
+        f"./data/07_model_output/{final_submission}.csv", mode="w"
+    ) as out_file:
+        out_writter = csv.writer(out_file, delimiter=",", quotechar="'")
+        out_writter.writerow(["idaviso", "idpostulante"])
+        out_writter.writerows(all_submission)
+
 
 @log(logger)
 def rank_three_models():
@@ -346,12 +372,13 @@ def rank_three_models():
         df_applicants_to_predict.idpostulante.isin(ids_cold_start)
     ].merge(df_applicants_genre, on="idpostulante", how="inner")
 
+    submission_files = []
     # Predict cold start
-    #predict_cold_start(
-    #    applicants_sex_notices,
-    #    df_test_cold_start,
-    #    top_ten_by_sex,
-    #)
+    submission_files += predict_cold_start(
+        applicants_sex_notices,
+        df_test_cold_start,
+        top_ten_by_sex,
+    )
 
     # Split the the applicants that appear in train and test into two groups
     # hard_users: applicants that apply in more than 100 notices
@@ -385,7 +412,7 @@ def rank_three_models():
         df_applicants_to_predict.idpostulante.isin(ids_hard_users)
     ]
 
-    predict_hard_users(
+    submission_files += predict_hard_users(
         df_hard_users,
         df_test_hard_users,
         df_applicants_genre,
@@ -393,7 +420,7 @@ def rank_three_models():
         set(notice_live_from.idaviso),
     )
 
-    join_submission_files()
+    join_submission_files("final_submission", submission_files)
 
     """
     ids_low_users = ranking_by_applicant[
