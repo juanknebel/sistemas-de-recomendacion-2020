@@ -12,6 +12,7 @@ from sklearn.preprocessing import normalize
 from src.utils import cos_cdist
 import lightfm as lfm
 from lightfm.data import Dataset
+from lightfm.evaluation import precision_at_k
 
 
 logger = logging.getLogger("rank")
@@ -180,11 +181,27 @@ def generate_user_feature(features, features_names):
 
 
 @log(logger)
+def generate_features(df_features):
+    col = []
+    value = []
+    for a_column in df_features.columns.values:
+        col += [a_column] * len(df_features[a_column].unique())
+        value += list(df_features[a_column].unique())
+
+    features = []
+    for x, y in zip(col, value):
+        res = str(x) + ":" + str(y)
+        features += [res]
+    return features
+
+
+@log(logger)
 def predict_hard_users(
     train: pd.DataFrame,
     test: pd.DataFrame,
     genre: pd.DataFrame,
     education: pd.DataFrame,
+    notices: pd.DataFrame,
     available_notices: set,
 ):
     user_feature = genre.merge(education, on="idpostulante", how="left")
@@ -196,17 +213,12 @@ def predict_hard_users(
         user_feature.idpostulante.isin(train.idpostulante)
     ]
 
-    col = []
-    value = []
-    for a_column in user_feature.columns.values:
-        if "idpostulante" != a_column:
-            col += [a_column] * len(user_feature[a_column].unique())
-            value += list(user_feature[a_column].unique())
-
-    uf = []
-    for x, y in zip(col, value):
-        res = str(x) + ":" + str(y)
-        uf += [res]
+    uf = generate_features(user_feature[["sexo", "estudio"]])
+    itf = generate_features(
+        notices[
+            ["nombre_zona", "tipo_de_trabajo", "nivel_laboral", "nombre_area"]
+        ]
+    )
 
     dataset1 = Dataset()
     dataset1.fit(
@@ -231,7 +243,7 @@ def predict_hard_users(
         item_feature_map,
     ) = dataset1.mapping()
     inv_item_id_map = {v: k for k, v in item_id_map.items()}
-    model = lfm.LightFM(loss="warp")
+    model = lfm.LightFM(loss="warp", random_state=42)
     model.fit(
         interactions,
         user_features=user_features,
@@ -239,6 +251,11 @@ def predict_hard_users(
         epochs=1000,
         num_threads=8,
     )
+
+    test_precision = precision_at_k(
+        model, interactions, user_features=user_features, k=10, num_threads=8
+    ).mean()
+    logger.info(f"Evaluation for LightFM is: {test_precision}")
 
     final_predictions = {}
     for a_user in tqdm(test.idpostulante.unique()):
@@ -365,6 +382,13 @@ def rank_three_models():
 
     top_ten_by_sex = generate_top_ten_advice_by_sex(applicants_sex_notices)
 
+    # Genero un diccionario con los usuarios y sus postulaciones
+    applicants_notices_dict = {}
+    for applicant, group in tqdm(
+        df_applicants_with_rank.groupby("idpostulante")
+    ):
+        applicants_notices_dict[applicant] = set(group.idaviso.values)
+
     # Split the applicants to predict in two different groups
     # intersect: applicants that exist in both train and test
     # cold_start: applicants never seen in train
@@ -421,6 +445,7 @@ def rank_three_models():
         df_test_hard_users,
         df_applicants_genre,
         df_applicants_education,
+        df_notice,
         set(notice_live_from.idaviso),
     )
 
