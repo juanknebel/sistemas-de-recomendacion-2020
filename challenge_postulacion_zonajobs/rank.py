@@ -244,7 +244,11 @@ def predict_hard_users(
     for a_user in tqdm(test.idpostulante.unique()):
         user_x = user_id_map[a_user]
         n_users, n_items = interactions.shape
-        prediction = np.argsort(model.predict(user_x, np.arange(n_items)))[::-1]
+        prediction = np.argsort(
+            model.predict(
+                user_x, np.arange(n_items), user_features=user_features
+            )
+        )[::-1]
         prediction_for_user = []
         for pred in prediction:
             notice = inv_item_id_map[pred]
