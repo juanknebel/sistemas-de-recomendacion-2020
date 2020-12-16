@@ -10,6 +10,8 @@ from src.utils import split_in, log
 
 from sklearn.preprocessing import normalize
 from src.utils import cos_cdist
+import lightfm as lfm
+from lightfm.data import Dataset
 
 
 logger = logging.getLogger("rank")
@@ -36,75 +38,6 @@ logger.addHandler(debug_handler)
 logger.addHandler(info_handler)
 
 
-def rank(from_index: int, to_index: int, suffix):
-    df_applicants_train = pd.read_csv(
-        "./data/02_intermediate/postulaciones/postulaciones_extended_train.csv"
-    )
-    df_applicants_to_predict = pd.read_csv(
-        "./data/02_intermediate/postulaciones/postulaciones_test.csv"
-    )
-
-    matrix_train = pd.read_csv(
-        "./data/02_intermediate/postulantes/postulantes_matrix_train.csv",
-        index_col="idpostulante",
-    )
-    matrix_test = pd.read_csv(
-        "./data/02_intermediate/postulantes/postulantes_matrix_test.csv",
-        index_col="idpostulante",
-    )
-    numpy_matrix_test = matrix_test.to_numpy()
-    numpy_matrix_train = matrix_train.to_numpy()
-    normalized_test = normalize(numpy_matrix_test, norm="l2")
-    normalized_train = normalize(numpy_matrix_train, norm="l2")
-
-    submission = pd.DataFrame()
-    for index in tqdm(np.arange(from_index, to_index)):
-        applicant_to_predict_vector = normalized_test[
-            index
-        ]  # matrix_test.iloc[index,].values
-        applicant_to_predict_id = matrix_test.iloc[
-            index,
-        ].name
-        treshold = 0.9
-        top = 10
-        cos = cos_cdist(normalized_train, applicant_to_predict_vector)
-        sim = pd.DataFrame(
-            {"idpostulante": matrix_train.index.values, "similaridad": cos}
-        )
-        top_applicants = (
-            sim[(sim.similaridad > treshold)].head(top).idpostulante.values
-        )
-
-        notices_temp = (
-            df_applicants_train[
-                df_applicants_train.idpostulante.isin(top_applicants)
-            ]
-            .groupby("idaviso")
-            .agg({"idpostulante": "count"})
-            .reset_index()
-        )
-        notices_ids = notices_temp[
-            notices_temp.idpostulante > 1
-        ].idaviso.values[:10]
-        notcies_len = len(notices_ids)
-        applicant = df_applicants_to_predict[
-            df_applicants_to_predict.idpostulante == applicant_to_predict_id
-        ]
-
-        to_rank = pd.DataFrame(
-            {
-                "idaviso": notices_ids,
-                "idpostulante": [applicant.idpostulante.values[0]]
-                * notcies_len,
-            }
-        )
-        submission = pd.concat([submission, to_rank])
-
-    submission.to_csv(
-        f"./data/07_model_output/baseline_{suffix}.csv", index=False
-    )
-
-
 @log(logger)
 def calculate_intervals(number_of_threads: int, total: int):
     interval = math.ceil(total / number_of_threads)
@@ -115,32 +48,12 @@ def calculate_intervals(number_of_threads: int, total: int):
 
 
 @log(logger)
-def rank_similarity():
-    total = 156232
-    jobs = []
-    number_of_threads = 8
-    intervals = calculate_intervals(number_of_threads, total)
-    for index, (f, t) in enumerate(intervals):
-        p = multiprocessing.Process(
-            target=rank,
-            args=(
-                f,
-                t,
-                index,
-            ),
-        )
-        jobs.append(p)
-        p.start()
-
-
-@log(logger)
 def rank_cold_start(
-    test_attributes: pd.DataFrame,
     train_attributes: pd.DataFrame,
+    test_attributes: pd.DataFrame,
     df_applicants_train: pd.DataFrame,
     df_applicants_test: pd.DataFrame,
     top_ten_by_sex: dict,
-    ranking_notice_by_applicant: pd.DataFrame,
     suffix: int,
 ):
     normalized_test = normalize(test_attributes.to_numpy(), norm="l2")
@@ -202,15 +115,18 @@ def rank_cold_start(
 
 @log(logger)
 def predict_cold_start(
-    all_applicants: pd.DataFrame,
+    applicants_with_live_notices: pd.DataFrame,
     applicants_test: pd.DataFrame,
     top_ten_by_sex: dict,
-    ranking_notice_by_applicant: pd.DataFrame,
 ):
     matrix_train = pd.read_csv(
         "./data/02_intermediate/postulantes/postulantes_matrix_train.csv",
         index_col="idpostulante",
     )
+
+    matrix_train = matrix_train[
+        matrix_train.index.isin(applicants_with_live_notices.idpostulante)
+    ]
 
     matrix_test = pd.read_csv(
         "./data/02_intermediate/postulantes/postulantes_matrix_test.csv",
@@ -230,12 +146,11 @@ def predict_cold_start(
         p = multiprocessing.Process(
             target=rank_cold_start,
             args=(
-                filter_matrix_test,
                 matrix_train,
-                all_applicants,
+                filter_matrix_test,
+                applicants_with_live_notices,
                 applicants_test,
                 top_ten_by_sex,
-                ranking_notice_by_applicant,
                 index,
             ),
         )
@@ -243,23 +158,92 @@ def predict_cold_start(
         p.start()
 
 
-def predict_hard_users(train: pd.DataFrame, test: pd.DataFrame):
-    df_notice = pd.read_csv(
-        "../data/02_intermediate/avisos/avisos_extended.csv"
+def generate_user_feature(features, features_names):
+    res = []
+    for one_feature in features:
+        one = []
+        for index, feat_name in enumerate(features_names):
+            one += [feat_name + ":" + str(one_feature[index])]
+        res += [one]
+    return res
+
+
+@log(logger)
+def predict_hard_users(
+    train: pd.DataFrame,
+    test: pd.DataFrame,
+    genre: pd.DataFrame,
+    education: pd.DataFrame,
+    available_notices: set,
+):
+    user_feature = genre.merge(education, on="idpostulante", how="left")
+    user_feature["estudio"] = user_feature.nombre + "-" + user_feature.estado
+    user_feature.drop(
+        columns=["nombre", "estado", "fechanacimiento"], inplace=True
+    )
+    user_feature_hard_user = user_feature[
+        user_feature.idpostulante.isin(train.idpostulante)
+    ]
+
+    col = []
+    value = []
+    for a_column in user_feature.columns.values:
+        if "idpostulante" != a_column:
+            col += [a_column] * len(user_feature[a_column].unique())
+            value += list(user_feature[a_column].unique())
+
+    uf = []
+    for x, y in zip(col, value):
+        res = str(x) + ":" + str(y)
+        uf += [res]
+
+    dataset1 = Dataset()
+    dataset1.fit(
+        train.idpostulante.unique(),  # all the users
+        train.idaviso.unique(),  # all the items
+        user_features=uf,  # additional user features
+    )
+    # plugging in the interactions and their weights
+    (interactions, weights) = dataset1.build_interactions(
+        [(x[1], x[0], x[3]) for x in train.values]
     )
 
-    rank_notices = (
-        train.groupby("idaviso")
-        .agg({"rank": "count"})
-        .reset_index()
-        .rename(columns={"rank": "cantidad"})
+    feature_list = generate_user_feature(
+        user_feature_hard_user[["sexo", "estudio"]].values, ["sexo", "estudio"]
+    )
+    user_tuple = list(zip(user_feature_hard_user.idpostulante, feature_list))
+    user_features = dataset1.build_user_features(user_tuple, normalize=False)
+    (
+        user_id_map,
+        user_feature_map,
+        item_id_map,
+        item_feature_map,
+    ) = dataset1.mapping()
+    inv_item_id_map = {v: k for k, v in item_id_map.items()}
+    model = lfm.LightFM(loss="warp")
+    model.fit(
+        interactions,
+        user_features=user_features,
+        sample_weight=weights,
+        epochs=1000,
+        num_threads=8,
     )
 
-    notice = (
-        df_notice.merge(rank_notices, on="idaviso", how="left")
-        .fillna(0)
-        .drop(columns=["online_desde", "online_hasta"])
-    )
+    final_predictions = {}
+    for a_user in tqdm(test.idpostulante.unique()):
+        user_x = user_id_map[a_user]
+        n_users, n_items = interactions.shape
+        prediction = np.argsort(model.predict(user_x, np.arange(n_items)))[::-1]
+        prediction_for_user = []
+        for pred in prediction:
+            notice = inv_item_id_map[pred]
+            if notice in available_notices:
+                prediction_for_user += [notice]
+            if len(prediction_for_user) == 10:
+                break
+        final_predictions[a_user] = prediction_for_user
+
+    write_dict(final_predictions, "lightfm")
 
 
 @log(logger)
@@ -273,22 +257,10 @@ def write_dict(submission: dict, filename: str, header=None):
 
 
 @log(logger)
-def rank_three_models():
-    df_applicants_to_predict = pd.read_csv(
-        "./data/02_intermediate/postulaciones/postulaciones_test.csv"
-    )
-    dtypes = {"idaviso": "int64", "idpostulante": "string"}
-    mydateparser = lambda x: datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
-    df_applicants_with_rank = pd.read_csv(
-        "./data/02_intermediate/postulaciones/postulaciones_train_rank.csv",
-        parse_dates=["fechapostulacion"],
-        date_parser=mydateparser,
-        dtype=dtypes,
-    )
-
+def generate_top_ten_advice_by_sex(applicants: pd.DataFrame):
     # Generate a notice top 10 rank by sex
     ranking_notice = (
-        df_applicants_with_rank.groupby(["idaviso", "sexo"])
+        applicants.groupby(["idaviso", "sexo"])
         .agg({"idpostulante": "count"})
         .reset_index()
         .rename(columns={"idpostulante": "cantidad"})
@@ -308,14 +280,60 @@ def rank_three_models():
         .idaviso.values
     )
 
-    # Generate a notice top rank by postulante
-    ranking_notice_by_applicant = (
-        df_applicants_with_rank.groupby(["idaviso", "idpostulante"])
-        .agg({"rank": "count"})
-        .reset_index()
-        .rename(columns={"rank": "cantidad"})
-        .sort_values(by="cantidad", ascending=False)
+    return top_ten_by_sex
+
+
+@log(logger)
+def join_submission_files():
+    pass
+
+@log(logger)
+def rank_three_models():
+    df_applicants_to_predict = pd.read_csv(
+        "./data/02_intermediate/postulaciones/postulaciones_test.csv"
     )
+
+    dtypes = {"idaviso": "int64", "idpostulante": "string"}
+    mydateparser = lambda x: datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
+    df_applicants_with_rank = pd.read_csv(
+        "./data/02_intermediate/postulaciones/postulaciones_train_rank.csv",
+        parse_dates=["fechapostulacion"],
+        date_parser=mydateparser,
+        dtype=dtypes,
+    )
+
+    dtypes = {
+        "idaviso": "int64",
+        "tipo_de_trabajo": "string",
+        "nivel_laboral": "string",
+        "nombre_area": "string",
+    }
+    mydateparser = lambda x: datetime.datetime.strptime(x, "%Y-%m-%d")
+    df_notice = pd.read_csv(
+        "./data/02_intermediate/avisos/avisos_detalle.csv",
+        parse_dates=["online_desde", "online_hasta"],
+        date_parser=mydateparser,
+        dtype=dtypes,
+    )
+    df_applicants_genre = pd.read_csv(
+        "./data/02_intermediate/postulantes/postulantes_genero_edad.csv"
+    )
+    df_applicants_education = pd.read_csv(
+        "./data/02_intermediate/postulantes/postulantes_educacion.csv"
+    )
+
+    # Me quedo con los notices que van a estar activos a partir de abril
+    live_until = datetime.datetime(2018, 4, 1)
+    notice_live_from = df_notice[df_notice.online_hasta >= live_until]
+    applicants_sex_notices = df_applicants_with_rank.merge(
+        notice_live_from[["idaviso"]], on="idaviso", how="inner"
+    ).merge(
+        df_applicants_genre[["idpostulante", "sexo"]],
+        on="idpostulante",
+        how="inner",
+    )
+
+    top_ten_by_sex = generate_top_ten_advice_by_sex(applicants_sex_notices)
 
     # Split the applicants to predict in two different groups
     # intersect: applicants that exist in both train and test
@@ -326,15 +344,14 @@ def rank_three_models():
 
     df_test_cold_start = df_applicants_to_predict[
         df_applicants_to_predict.idpostulante.isin(ids_cold_start)
-    ]
+    ].merge(df_applicants_genre, on="idpostulante", how="inner")
 
     # Predict cold start
-    predict_cold_start(
-        df_applicants_with_rank,
-        df_test_cold_start,
-        top_ten_by_sex,
-        ranking_notice_by_applicant,
-    )
+    #predict_cold_start(
+    #    applicants_sex_notices,
+    #    df_test_cold_start,
+    #    top_ten_by_sex,
+    #)
 
     # Split the the applicants that appear in train and test into two groups
     # hard_users: applicants that apply in more than 100 notices
@@ -357,6 +374,9 @@ def rank_three_models():
         ranking_by_applicant.cantidad > 100
     ].idpostulante.values
 
+    # esto debe ser borrado! para hacer woosh
+    ids_hard_users = intersect
+
     df_hard_users = df_applicants_with_rank[
         df_applicants_with_rank.idpostulante.isin(ids_hard_users)
     ]
@@ -365,7 +385,15 @@ def rank_three_models():
         df_applicants_to_predict.idpostulante.isin(ids_hard_users)
     ]
 
-    predict_hard_users(df_hard_users, df_test_hard_users)
+    predict_hard_users(
+        df_hard_users,
+        df_test_hard_users,
+        df_applicants_genre,
+        df_applicants_education,
+        set(notice_live_from.idaviso),
+    )
+
+    join_submission_files()
 
     """
     ids_low_users = ranking_by_applicant[
@@ -383,5 +411,4 @@ def rank_three_models():
 
 
 if __name__ == "__main__":
-    # rank_similarity()
     rank_three_models()
