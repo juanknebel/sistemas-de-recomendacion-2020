@@ -242,13 +242,13 @@ def predict_hard_users(
     inv_item_id_map = {v: k for k, v in item_id_map.items()}
 
     # for component in [10, 35, 50, 80, 100, 200]:
-    component = 200
+    component = 50
     model = lfm.LightFM(no_components=component, loss="warp", random_state=42)
     model.fit(
         interactions,
         user_features=user_features,
         sample_weight=weights,
-        epochs=100,
+        epochs=2000,
         num_threads=8,
         verbose=True,
     )
