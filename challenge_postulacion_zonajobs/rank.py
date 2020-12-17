@@ -87,10 +87,6 @@ def rank_cold_start(
             .idpostulante.values
         )
 
-        # notices_ids = ranking_notice_by_applicant[
-        #    ranking_notice_by_applicant.idpostulante.isin(top_applicants)
-        # ].idaviso.values[:10]
-
         notices_ids = (
             df_applicants_train[
                 df_applicants_train.idpostulante.isin(top_applicants)
@@ -170,6 +166,7 @@ def predict_cold_start(
     return [name for name in return_dict.values()]
 
 
+@log(logger)
 def generate_in_use_features(features, features_names):
     res = []
     for one_feature in features:
@@ -212,21 +209,14 @@ def predict_hard_users(
     user_feature_hard_user = user_feature[
         user_feature.idpostulante.isin(train.idpostulante)
     ]
-    item_feature_hard_user = notices[notices.idaviso.isin(train.idaviso)]
 
     uf = generate_features(user_feature[["sexo", "estudio"]])
-    itf = generate_features(
-        notices[
-            ["nombre_zona", "tipo_de_trabajo", "nivel_laboral", "nombre_area"]
-        ]
-    )
 
     dataset1 = Dataset()
     dataset1.fit(
         train.idpostulante.unique(),  # all the users
         train.idaviso.unique(),  # all the items
         user_features=uf,  # additional user features
-        item_features=itf,
     )
     # plugging in the interactions and their weights
     (interactions, weights) = dataset1.build_interactions(
@@ -236,46 +226,43 @@ def predict_hard_users(
     user_feature_list = generate_in_use_features(
         user_feature_hard_user[["sexo", "estudio"]].values, ["sexo", "estudio"]
     )
-    item_feature_list = generate_in_use_features(
-        item_feature_hard_user[
-            ["nombre_zona", "tipo_de_trabajo", "nivel_laboral", "nombre_area"]
-        ].values,
-        ["nombre_zona", "tipo_de_trabajo", "nivel_laboral", "nombre_area"],
-    )
     user_tuple = list(
         zip(user_feature_hard_user.idpostulante, user_feature_list)
     )
-    item_tuple = list(
-        zip(item_feature_hard_user.idaviso.unique(), item_feature_list)
-    )
+
     user_features = dataset1.build_user_features(user_tuple, normalize=False)
-    item_features = dataset1.build_item_features(item_tuple, normalize=False)
+
     (
         user_id_map,
         user_feature_map,
         item_id_map,
         item_feature_map,
     ) = dataset1.mapping()
+
     inv_item_id_map = {v: k for k, v in item_id_map.items()}
-    model = lfm.LightFM(loss="warp", random_state=42)
+
+    # for component in [10, 35, 50, 80, 100, 200]:
+    component = 100
+    model = lfm.LightFM(no_components=component, loss="warp", random_state=42)
     model.fit(
         interactions,
         user_features=user_features,
-        item_features=item_features,
         sample_weight=weights,
-        epochs=1000,
+        epochs=100,
         num_threads=8,
+        verbose=True,
     )
 
     test_precision = precision_at_k(
         model,
         interactions,
         user_features=user_features,
-        item_features=item_features,
         k=10,
         num_threads=8,
     ).mean()
-    logger.info(f"Evaluation for LightFM is: {test_precision}")
+    logger.info(
+        f"Evaluation for LightFM is: {test_precision} with {component} number of component"
+    )
 
     final_predictions = {}
     for a_user in tqdm(test.idpostulante.unique()):
@@ -286,7 +273,6 @@ def predict_hard_users(
                 user_x,
                 np.arange(n_items),
                 user_features=user_features,
-                item_features=item_features,
             )
         )[::-1]
         prediction_for_user = []
@@ -433,6 +419,8 @@ def rank_three_models():
         "cold_start_6",
         "cold_start_7",
     ]
+
+    # submission_files = []
     # Predict cold start
     # submission_files += predict_cold_start(
     #    applicants_sex_notices,
