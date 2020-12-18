@@ -242,7 +242,7 @@ def predict_hard_users(
     inv_item_id_map = {v: k for k, v in item_id_map.items()}
 
     # for component in [10, 35, 50, 80, 100, 200]:
-    component = 50
+    component = 40
     model = lfm.LightFM(no_components=component, loss="warp", random_state=42)
     model.fit(
         interactions,
@@ -266,7 +266,10 @@ def predict_hard_users(
 
     final_predictions = {}
     for a_user in tqdm(test.idpostulante.unique()):
-        user_x = user_id_map[a_user]
+        try:
+            user_x = user_id_map[a_user]
+        except:
+            user_x = 0
         n_users, n_items = interactions.shape
         prediction = np.argsort(
             model.predict(
@@ -546,5 +549,5 @@ if __name__ == "__main__":
     import sys
 
     logger.info(f"Start experiment number: {sys.argv[1]}")
-    rank_three_models()
-    # rank_only_lightfm()
+    # rank_three_models()
+    rank_only_lightfm()
