@@ -219,7 +219,7 @@ def predict_hard_users(
         train.idpostulante.unique(),  # all the users
         train.idaviso.unique(),  # all the items
         user_features=uf,  # additional user features
-        item_features=itf, # additional item features
+        item_features=itf,  # additional item features
     )
     # plugging in the interactions and their weights
     (interactions, weights) = dataset1.build_interactions(
@@ -227,7 +227,8 @@ def predict_hard_users(
     )
 
     user_feature_list = generate_in_use_features(
-        user_feature_hard_user[["sexo", "nombre", "estado"]].values, ["sexo", "nombre", "estado"]
+        user_feature_hard_user[["sexo", "nombre", "estado"]].values,
+        ["sexo", "nombre", "estado"],
     )
     user_tuple = list(
         zip(user_feature_hard_user.idpostulante, user_feature_list)
@@ -249,8 +250,8 @@ def predict_hard_users(
     model = lfm.LightFM(no_components=component, loss="warp", random_state=42)
     model.fit(
         interactions,
-        user_features=user_features,
-        sample_weight=weights,
+        # user_features=user_features,
+        # sample_weight=weights,
         epochs=500,
         num_threads=8,
         verbose=True,
@@ -259,7 +260,7 @@ def predict_hard_users(
     test_precision = precision_at_k(
         model,
         interactions,
-        user_features=user_features,
+        # user_features=user_features,
         k=10,
         num_threads=8,
     ).mean()
