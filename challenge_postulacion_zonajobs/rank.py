@@ -211,16 +211,22 @@ def predict_hard_users(
     ]
 
     uf = generate_features(user_feature[["sexo", "estudio"]])
+    itf = generate_features(
+        notices[
+            ["nombre_zona", "tipo_de_trabajo", "nivel_laboral", "nombre_area"]
+        ]
+    )
 
     dataset1 = Dataset()
     dataset1.fit(
         train.idpostulante.unique(),  # all the users
         train.idaviso.unique(),  # all the items
         user_features=uf,  # additional user features
+        item_features=itf, # additional item features
     )
     # plugging in the interactions and their weights
     (interactions, weights) = dataset1.build_interactions(
-        [(x[1], x[0], x[3]) for x in train.values]
+        [(x[1], x[0]) for x in train.values]
     )
 
     user_feature_list = generate_in_use_features(
