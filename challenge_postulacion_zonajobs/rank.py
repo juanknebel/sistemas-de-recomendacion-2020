@@ -202,15 +202,12 @@ def predict_hard_users(
     available_notices: set,
 ):
     user_feature = genre.merge(education, on="idpostulante", how="left")
-    user_feature["estudio"] = user_feature.nombre + "-" + user_feature.estado
-    user_feature.drop(
-        columns=["nombre", "estado", "fechanacimiento"], inplace=True
-    )
+    user_feature.drop(columns=["fechanacimiento"], inplace=True)
     user_feature_hard_user = user_feature[
         user_feature.idpostulante.isin(train.idpostulante)
     ]
 
-    uf = generate_features(user_feature[["sexo", "estudio"]])
+    uf = generate_features(user_feature[["sexo", "nombre", "estado"]])
     itf = generate_features(
         notices[
             ["nombre_zona", "tipo_de_trabajo", "nivel_laboral", "nombre_area"]
@@ -230,7 +227,7 @@ def predict_hard_users(
     )
 
     user_feature_list = generate_in_use_features(
-        user_feature_hard_user[["sexo", "estudio"]].values, ["sexo", "estudio"]
+        user_feature_hard_user[["sexo", "nombre", "estado"]].values, ["sexo", "nombre", "estado"]
     )
     user_tuple = list(
         zip(user_feature_hard_user.idpostulante, user_feature_list)
