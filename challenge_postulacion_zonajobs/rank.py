@@ -219,7 +219,6 @@ def predict_hard_users(
     dataset1 = Dataset()
     dataset1.fit(
         train.idpostulante.unique(),  # all the users
-        # train.idaviso.unique(),  # all the items
         notices.idaviso.unique(),
         user_features=uf,  # additional user features
         item_features=itf,  # additional item features
@@ -249,7 +248,7 @@ def predict_hard_users(
     inv_item_id_map = {v: k for k, v in item_id_map.items()}
 
     # for component in [10, 35, 50, 80, 100, 200]:
-    component = 40
+    component = 50
     model = lfm.LightFM(no_components=component, loss="warp", random_state=42)
     model.fit(
         interactions,
