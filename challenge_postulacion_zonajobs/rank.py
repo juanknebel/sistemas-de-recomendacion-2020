@@ -1,3 +1,4 @@
+from os import execlp
 import pandas as pd
 import numpy as np
 import math
@@ -200,6 +201,7 @@ def predict_hard_users(
     education: pd.DataFrame,
     notices: pd.DataFrame,
     available_notices: set,
+    applicant_notice: dict,
 ):
     user_feature = genre.merge(education, on="idpostulante", how="left")
     user_feature.drop(columns=["fechanacimiento"], inplace=True)
@@ -271,6 +273,10 @@ def predict_hard_users(
     final_predictions = {}
     for a_user in tqdm(test.idpostulante.unique()):
         try:
+            notices_by_user = applicant_notice[a_user]
+        except:
+            notices_by_user = set()
+        try:
             user_x = user_id_map[a_user]
         except:
             user_x = 0
@@ -285,7 +291,10 @@ def predict_hard_users(
         prediction_for_user = []
         for pred in prediction:
             notice = inv_item_id_map[pred]
-            if notice in available_notices:
+            should_add = (
+                notice in available_notices and notice not in notices_by_user
+            )
+            if should_add:
                 prediction_for_user += [notice]
             if len(prediction_for_user) == 10:
                 break
@@ -539,6 +548,12 @@ def rank_only_lightfm():
         how="inner",
     )
 
+    applicant_notices = {}
+    for applicant, group in tqdm(
+        df_applicants_with_rank.groupby("idpostulante")
+    ):
+        applicant_notices[applicant] = set(group.idaviso.values)
+
     predict_hard_users(
         df_applicants_with_rank,
         df_applicants_to_predict,
@@ -546,6 +561,7 @@ def rank_only_lightfm():
         df_applicants_education,
         df_notice,
         set(notice_live_from.idaviso),
+        applicant_notices,
     )
 
 
