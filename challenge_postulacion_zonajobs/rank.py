@@ -219,7 +219,8 @@ def predict_hard_users(
     dataset1 = Dataset()
     dataset1.fit(
         train.idpostulante.unique(),  # all the users
-        train.idaviso.unique(),  # all the items
+        # train.idaviso.unique(),  # all the items
+        notices.idaviso.unique(),
         user_features=uf,  # additional user features
         item_features=itf,  # additional item features
     )
@@ -254,7 +255,7 @@ def predict_hard_users(
         interactions,
         # user_features=user_features,
         # sample_weight=weights,
-        epochs=500,
+        epochs=100,
         num_threads=8,
         verbose=True,
     )
