@@ -248,7 +248,7 @@ def predict_hard_users(
         interactions,
         user_features=user_features,
         sample_weight=weights,
-        epochs=2000,
+        epochs=500,
         num_threads=8,
         verbose=True,
     )
@@ -272,7 +272,7 @@ def predict_hard_users(
             model.predict(
                 user_x,
                 np.arange(n_items),
-                user_features=user_features,
+                # user_features=user_features,
             )
         )[::-1]
         prediction_for_user = []
@@ -486,8 +486,65 @@ def rank_three_models():
     """
 
 
+@log(logger)
+def rank_only_lightfm():
+    df_applicants_to_predict = pd.read_csv(
+        "./data/02_intermediate/postulaciones/postulaciones_test.csv"
+    )
+
+    dtypes = {"idaviso": "int64", "idpostulante": "string"}
+    mydateparser = lambda x: datetime.datetime.strptime(x, "%Y-%m-%d %H:%M:%S")
+    df_applicants_with_rank = pd.read_csv(
+        "./data/02_intermediate/postulaciones/postulaciones_train_rank.csv",
+        parse_dates=["fechapostulacion"],
+        date_parser=mydateparser,
+        dtype=dtypes,
+    )
+
+    dtypes = {
+        "idaviso": "int64",
+        "tipo_de_trabajo": "string",
+        "nivel_laboral": "string",
+        "nombre_area": "string",
+    }
+    mydateparser = lambda x: datetime.datetime.strptime(x, "%Y-%m-%d")
+    df_notice = pd.read_csv(
+        "./data/02_intermediate/avisos/avisos_detalle.csv",
+        parse_dates=["online_desde", "online_hasta"],
+        date_parser=mydateparser,
+        dtype=dtypes,
+    )
+    df_applicants_genre = pd.read_csv(
+        "./data/02_intermediate/postulantes/postulantes_genero_edad.csv"
+    )
+    df_applicants_education = pd.read_csv(
+        "./data/02_intermediate/postulantes/postulantes_educacion.csv"
+    )
+
+    # Me quedo con los notices que van a estar activos a partir de abril
+    live_until = datetime.datetime(2018, 4, 1)
+    notice_live_from = df_notice[df_notice.online_hasta >= live_until]
+    applicants_sex_notices = df_applicants_with_rank.merge(
+        notice_live_from[["idaviso"]], on="idaviso", how="inner"
+    ).merge(
+        df_applicants_genre[["idpostulante", "sexo"]],
+        on="idpostulante",
+        how="inner",
+    )
+
+    predict_hard_users(
+        df_applicants_with_rank,
+        df_applicants_to_predict,
+        df_applicants_genre,
+        df_applicants_education,
+        df_notice,
+        set(notice_live_from.idaviso),
+    )
+
+
 if __name__ == "__main__":
     import sys
 
     logger.info(f"Start experiment number: {sys.argv[1]}")
     rank_three_models()
+    # rank_only_lightfm()
