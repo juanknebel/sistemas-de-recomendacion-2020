@@ -1,6 +1,6 @@
 Challenge:
   LibroQueLeo:
-      experiment: 'nmf'
+      experiment: 'svdpp'
       randomState: 42
       Path:
         input: 'data/02_intermediate/'
@@ -9,8 +9,8 @@ Challenge:
       Files:
         train: 'opiniones_train_modelos.csv'
         test: 'opiniones_test_modelos.csv'
-        model: 'nmf_1'
-        submission: 'nmf_1.csv'
+        model: 'svdpp_1'
+        submission: 'scvpp_1.csv'
       Predictor:
         # method: [predict_knn, predict_svd, predict_lightgbm, ensamble]
         method: 'predict_svd'

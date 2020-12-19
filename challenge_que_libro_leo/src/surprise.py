@@ -77,13 +77,13 @@ class PredictSurprise(PredictionModel):
 class PredictSVD(PredictSurprise):
     def __init__(self, random_state=0):
         super(PredictSVD, self).__init__(random_state)
-        self.algorithm = sp.prediction_algorithms.NMF
+        self.algorithm = sp.prediction_algorithms.SVDpp
         self.n_jobs = -1
         self.param_grid = {
-            "n_epochs": [100, 300, 700],
-            #"lr_all": [0.001, 0.0015, 0.002, 0.003, 0.005, 0.007],
-            #"reg_all": [0.2, 0.4, 0.42, 0.45, 0.49, 0.6],
-            "n_factors": range(20, 100, 10),
+            "n_epochs": [10, 20, 50],
+            "lr_all": [0.001, 0.0015, 0.002, 0.003, 0.005, 0.007],
+            "reg_all": [0.2, 0.4, 0.42, 0.45, 0.49, 0.6],
+            "n_factors": [10, 20, 40],
         }
 
     def load_model(self, model):
