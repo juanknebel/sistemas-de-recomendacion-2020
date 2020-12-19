@@ -77,7 +77,7 @@ class PredictSurprise(PredictionModel):
 class PredictSVD(PredictSurprise):
     def __init__(self, random_state=0):
         super(PredictSVD, self).__init__(random_state)
-        self.algorithm = sp.prediction_algorithms.SVD
+        self.algorithm = sp.prediction_algorithms.NMF
         self.n_jobs = -1
         self.param_grid = {
             "n_epochs": [100, 300, 700],
