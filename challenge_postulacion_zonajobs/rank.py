@@ -202,6 +202,7 @@ def predict_hard_users(
     notices: pd.DataFrame,
     available_notices: set,
     applicant_notice: dict,
+    header=None,
 ):
     user_feature = genre.merge(education, on="idpostulante", how="left")
     user_feature.drop(columns=["fechanacimiento"], inplace=True)
@@ -225,7 +226,7 @@ def predict_hard_users(
     )
     # plugging in the interactions and their weights
     (interactions, weights) = dataset1.build_interactions(
-        [(x[1], x[0]) for x in train.values]
+        [(x[1], x[0], x[3]) for x in train.values]
     )
 
     user_feature_list = generate_in_use_features(
@@ -248,7 +249,7 @@ def predict_hard_users(
     inv_item_id_map = {v: k for k, v in item_id_map.items()}
 
     # for component in [10, 35, 50, 80, 100, 200]:
-    component = 50
+    component = 40
     model = lfm.LightFM(no_components=component, loss="warp", random_state=42)
     model.fit(
         interactions,
@@ -300,7 +301,7 @@ def predict_hard_users(
                 break
         final_predictions[a_user] = prediction_for_user
 
-    write_dict(final_predictions, "lightfm")
+    write_dict(final_predictions, "lightfm", header)
     return ["lightfm"]
 
 
@@ -562,6 +563,7 @@ def rank_only_lightfm():
         df_notice,
         set(notice_live_from.idaviso),
         applicant_notices,
+        ["idaviso", "idpostulante"],
     )
 
 
