@@ -80,10 +80,10 @@ class PredictSVD(PredictSurprise):
         self.algorithm = sp.prediction_algorithms.SVD
         self.n_jobs = -1
         self.param_grid = {
-            "n_epochs": [300, 700, 1000],
-            "lr_all": [0.001, 0.0015, 0.002, 0.003, 0.005, 0.007],
-            "reg_all": [0.2, 0.4, 0.42, 0.45, 0.49, 0.6],
-            "n_factors": range(40, 130, 5),
+            "n_epochs": [100, 300, 700],
+            #"lr_all": [0.001, 0.0015, 0.002, 0.003, 0.005, 0.007],
+            #"reg_all": [0.2, 0.4, 0.42, 0.45, 0.49, 0.6],
+            "n_factors": range(20, 100, 10),
         }
 
     def load_model(self, model):

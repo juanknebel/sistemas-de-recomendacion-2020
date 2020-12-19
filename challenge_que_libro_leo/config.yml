@@ -1,6 +1,6 @@
 Challenge:
   LibroQueLeo:
-      experiment: 'LGBM con los modelos de svd y knn como features'
+      experiment: 'svd sin lr_all sin reg_all'
       randomState: 42
       Path:
         input: 'data/02_intermediate/'
@@ -9,11 +9,11 @@ Challenge:
       Files:
         train: 'opiniones_train_modelos.csv'
         test: 'opiniones_test_modelos.csv'
-        model: 'lgbm_modelos'
-        submission: 'lgbm_modelos.csv'
+        model: 'svd_1'
+        submission: 'svd_2.csv'
       Predictor:
         # method: [predict_knn, predict_svd, predict_lightgbm, ensamble]
-        method: 'predict_lightgbm'
+        method: 'predict_svd'
       Ensamble:
         Weights:
           svd: 0.35
