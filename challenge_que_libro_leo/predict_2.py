@@ -70,7 +70,7 @@ def predict(algo, data, col_name: str = "puntuacion"):
 def tune(
     algo, data_train, param_grid: dict = {"random_state": [0]}, n_jobs: int = -1
 ):
-    gs = RandomizedSearchCV(
+    gs = GridSearchCV(
         algo, param_grid, measures=["rmse", "mae"], cv=5, n_jobs=n_jobs
     )
     gs.fit(data_train)
