@@ -47,25 +47,30 @@ def testing_algorithm(train):
         )
 
 
-def predict(algo, data, col_name="puntuacion"):
+def predict(algo, data, col_name: str = "puntuacion"):
     usr_book_tuple = zip(
-        data[["id", "usuario", "libro"]].iloc[:, 0],
-        data[["id", "usuario", "libro"]].iloc[:, 1],
-        data[["id", "usuario", "libro"]].iloc[:, 2],
+        data[["id", "usuario", "genero", "libro"]].iloc[:, 0],
+        data[["id", "usuario", "genero", "libro"]].iloc[:, 1],
+        data[["id", "usuario", "genero", "libro"]].iloc[:, 2],
+        data[["id", "usuario", "genero", "libro"]].iloc[:, 3],
     )
     predictions = []
-    for id, user, book in usr_book_tuple:
+    for id, user, genre, book in usr_book_tuple:
         rating_est = np.round(algo.predict(user, book).est, 4)
         rating_est = min(max(rating_est, 1), 10)
-        predictions += [(id, user, rating_est)]
+        predictions += [(id, user, genre, book, rating_est)]
 
-    submission = pd.DataFrame(predictions, columns=["id", "usuario", col_name])
+    submission = pd.DataFrame(
+        predictions, columns=["id", "usuario", "genero", "libro", col_name]
+    )
 
     return submission
 
 
-def tune(algo, data_train, param_grid={"random_state": [0]}, n_jobs=-1):
-    gs = GridSearchCV(
+def tune(
+    algo, data_train, param_grid: dict = {"random_state": [0]}, n_jobs: int = -1
+):
+    gs = RandomizedSearchCV(
         algo, param_grid, measures=["rmse", "mae"], cv=5, n_jobs=n_jobs
     )
     gs.fit(data_train)
@@ -79,37 +84,67 @@ def tune(algo, data_train, param_grid={"random_state": [0]}, n_jobs=-1):
     return estimator
 
 
-def replace_usr_unknows_with_mean(predicted, users_in_train, global_mean):
-    predicted.iloc[~predicted.usuario.isin(users_in_train), 2] = global_mean
+def replace_usr_unknows_with_mean(
+    # ["id", "usuario", "genero", "libro", "<algo>_puntuacion"]
+    predicted: pd.DataFrame, 
+    users_in_train: set,
+    genre_means: dict,
+    genre_book_means: dict,
+):
+
+    ids_not_in_train = predicted[~predicted.usuario.isin(users_in_train)].id.values
+    for the_id in ids_not_in_train:
+        row = predicted[predicted.id == the_id]
+        try:
+            the_mean = genre_book_means[(row.genero.values[0], row.libro.values[0])]
+        except:
+            the_mean = genre_means[row.genero.values[0]]
+        predicted.iloc[~predicted.id == the_id, 4] = the_mean
+
     return predicted
 
 
-def save_model(model, output):
+def save_model(model, output: str):
     pickle.dump(model, open(output, "wb"))
+
+
+def calculate_means(train: pd.DataFrame):
+    mean_genre = train.groupby("genero").agg({"puntuacion": "mean"})
+    mg = mean_genre.to_dict()["puntuacion"]
+    mean_genre_book = train.groupby(["genero", "libro"]).agg(
+        {"puntuacion": "mean"}
+    )
+    # mean_genre_book.loc[('Hombre', '10-anos-con-mafalda'), :]
+    mgb = mean_genre_book.to_dict()["puntuacion"]
+
+    return mg, mgb
 
 
 if __name__ == "__main__":
     identificator = sys.argv[1]
     logger.info(f"Start experiment number: {identificator}")
 
-    train_directory = "./data/01_raw/"
+    train_directory = "./data/02_intermediate/"
     submission_directory = "./data/07_model_output/"
     model_directory = "./data/06_models/"
     file_train = f"{train_directory}opiniones_train.csv"
     file_test = f"{train_directory}opiniones_test.csv"
 
-    train = pd.read_csv(file_train)[["usuario", "libro", "puntuacion"]]
-    test = pd.read_csv(file_test)[["id", "usuario", "libro"]]
+    train = pd.read_csv(file_train)
+    test = pd.read_csv(file_test)
+
+    genre_means, genre_book_means = calculate_means(train)
+    global_mean = train.puntuacion.mean()
+    users_in_train = set(train.usuario.values)
 
     scale = (1.0, 10.0)
     reader = Reader(rating_scale=scale)
-    data_train = Dataset.load_from_df(train, reader)
+    data_train = Dataset.load_from_df(
+        train[["usuario", "libro", "puntuacion"]], reader
+    )
     trainset = data_train.build_full_trainset()
 
     # testing_algorithm(train)
-
-    global_mean = train.puntuacion.mean()
-    users_in_train = set(train.usuario.values)
 
     # SVD
     param_grid = {
@@ -125,7 +160,7 @@ if __name__ == "__main__":
     svd_predict = predict(svd, test, "svd_puntuacion")
 
     svd_predict = replace_usr_unknows_with_mean(
-        svd_predict, users_in_train, global_mean
+        svd_predict, users_in_train, genre_means, genre_book_means
     )
     save_model(svd, f"{model_directory}svd_{identificator}")
     svd_predict[["id", "svd_puntuacion"]].to_csv(
@@ -145,7 +180,7 @@ if __name__ == "__main__":
     knn_predict = predict(knn, test, "knn_puntuacion")
 
     knn_predict = replace_usr_unknows_with_mean(
-        knn_predict, users_in_train, global_mean
+        knn_predict, users_in_train, genre_means, genre_book_means
     )
     save_model(knn, f"{model_directory}knn_{identificator}")
     knn_predict[["id", "knn_puntuacion"]].to_csv(
@@ -167,7 +202,7 @@ if __name__ == "__main__":
     nmfb_predict = predict(nmfb, test, "nmfb_puntuacion")
 
     nmfb_predict = replace_usr_unknows_with_mean(
-        nmfb_predict, users_in_train, global_mean
+        nmfb_predict, users_in_train, genre_means, genre_book_means
     )
     save_model(nmfb, f"{model_directory}nmfb_{identificator}")
     nmfb_predict[["id", "nmfb_puntuacion"]].to_csv(

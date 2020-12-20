@@ -83,7 +83,7 @@ def generate_features_svd_knn_surprise():
     df_train["svd"] = [
         feature[1] for feature in generate_new_features(df_train, PredictSVD())
     ]
-    
+
     df_train["knn"] = [
         feature[1] for feature in generate_new_features(df_train, PredictKNN())
     ]
@@ -223,6 +223,23 @@ def add_opinions():
     )
 
 
+def final_etl():
+    users = pd.read_csv(f"./data/01_raw/usuarios.csv")
+    users.loc[users.genero.isna(), "genero"] = "no_declara"
+    users.to_csv("./data/02_intermediate/usuarios.csv", index=False)
+
+    train = pd.read_csv("./data/01_raw/opiniones_train.csv")
+    train = train.merge(
+        users, left_on="usuario", right_on="nombre", how="inner"
+    )
+    train.to_csv("./data/02_intermediate/opiniones_train.csv", index=False)
+
+    test = pd.read_csv("./data/01_raw/opiniones_test.csv")
+    test = test.merge(users, left_on="usuario", right_on="nombre", how="inner")
+    test.to_csv("./data/02_intermediate/opiniones_test.csv", index=False)
+
+
 if __name__ == "__main__":
     # add_opinions()
-    generate_features_svd_knn_surprise()
+    # generate_features_svd_knn_surprise()
+    final_etl()
