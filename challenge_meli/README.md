@@ -27,8 +27,6 @@ python etl.py
 Esto genera los nuevos arhivos que va a utilizar el recomendador.
 
 ### Ejecución del recomendador
-Para obtener el archivo csv con las recomendacion ejecutar lo siguiente
-```bash
-python predict_2.py "identificador"
-```
+Para obtener el archivo csv con las recomendacion ejecutar la jupyter notebook
+que se encuentra con el nombre de ```challenge_meli.ipynb```.
 El mismo queda guardado en ```data/07_model_output/submission.csv```
